@@ -50,6 +50,7 @@ class ArrayCanvas {
           case "tape":          this._drawTape(obj, areaY, eachH);         break;
           case "fib_tree":      this._drawFibTree(obj, areaY, eachH);      break;
           case "staircase":     this._drawStaircase(obj, areaY, eachH);    break;
+          case "linked_list":   this._drawLinkedList(obj, areaY, eachH);   break;
         }
         areaY += eachH;
       }
@@ -1025,5 +1026,202 @@ class ArrayCanvas {
       finished: false,
     });
     return { values, target };
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // linked_list – 連結リスト（ノード＋矢印）
+  // ════════════════════════════════════════════════════════════════════
+  _drawLinkedList(obj, areaY, areaH) {
+    const {
+      nodes      = [],
+      label      = "",
+      highlights = {},
+      is_doubly  = false,
+    } = obj;
+    const n   = nodes.length;
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    // ── レイアウト定数 ──────────────────────────────────────────────
+    const PAD_L   = 14;
+    const PAD_R   = 14;
+    const PAD_T   = 32;   // first/last ラベル用の上余白
+    const PAD_B   = 10;
+
+    const availW  = cw - PAD_L - PAD_R;
+    const availH  = areaH - PAD_T - PAD_B;
+
+    // ノードと矢印のサイズを利用可能幅から算出
+    // 片方向: n ノード + n 矢印 (最後は→NULL)
+    // 双方向: n ノード + (n-1) 矢印
+    const arrowSlots = is_doubly ? Math.max(n - 1, 0) : n;
+    const ARROW_W = Math.max(18, Math.min(32, availW * 0.12));
+    const NULL_W  = is_doubly ? 0 : Math.max(24, ARROW_W);
+    const NODE_W  = n === 0 ? 60
+                            : Math.max(32, Math.min(64,
+                                (availW - arrowSlots * ARROW_W - NULL_W) / n));
+    const NODE_H  = Math.max(28, Math.min(46, availH * 0.62));
+    const CORNER  = 5;
+
+    const totalW  = n === 0 ? 0
+                            : n * NODE_W + arrowSlots * ARROW_W + NULL_W;
+    const startX  = PAD_L + Math.max(0, (availW - totalW) / 2);
+    const nodeY   = areaY + PAD_T + (availH - NODE_H) / 2;
+    const midY    = nodeY + NODE_H / 2;
+
+    ctx.save();
+
+    // ラベル
+    if (label) {
+      ctx.fillStyle = "#6a8faf";
+      ctx.font      = "10px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(label, PAD_L, areaY + 12);
+    }
+
+    // 空リスト表示
+    if (n === 0) {
+      ctx.fillStyle = "#445566";
+      ctx.font      = "12px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("(空)", cw / 2, areaY + areaH / 2);
+      ctx.restore();
+      return;
+    }
+
+    // ── 各ノードを描画 ──────────────────────────────────────────────
+    const nodeXs = [];
+    for (let i = 0; i < n; i++) {
+      const slotsBefore = is_doubly ? i : i;
+      const x = startX + i * NODE_W + slotsBefore * ARROW_W;
+      nodeXs.push(x);
+
+      const hlColor = highlights[String(i)];
+
+      // ノード背景
+      ctx.fillStyle = "#1c2a3a";
+      this._rrect(ctx, x, nodeY, NODE_W, NODE_H, CORNER);
+      ctx.fill();
+
+      // ノード枠
+      ctx.strokeStyle = hlColor || "#4472C4";
+      ctx.lineWidth   = hlColor ? 2.5 : 1.5;
+      this._rrect(ctx, x, nodeY, NODE_W, NODE_H, CORNER);
+      ctx.stroke();
+
+      // ハイライト背景色
+      if (hlColor) {
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        ctx.fillStyle   = hlColor;
+        this._rrect(ctx, x, nodeY, NODE_W, NODE_H, CORNER);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 値テキスト
+      const fs = Math.max(10, Math.min(15, NODE_W * 0.32));
+      ctx.fillStyle    = hlColor || "#ddd";
+      ctx.font         = `bold ${fs}px monospace`;
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(nodes[i]), x + NODE_W / 2, midY);
+      ctx.textBaseline = "alphabetic";
+
+      // ── 矢印描画 ──────────────────────────────────────────────────
+      if (i < n - 1) {
+        const ax1 = x + NODE_W;
+        const ax2 = ax1 + ARROW_W;
+        ctx.strokeStyle = "#5577aa";
+        ctx.lineWidth   = 1.5;
+        if (is_doubly) {
+          this._arrow(ctx, ax1, midY - 4, ax2, midY - 4);   // →
+          this._arrow(ctx, ax2, midY + 4, ax1, midY + 4);   // ←
+        } else {
+          this._arrow(ctx, ax1, midY, ax2, midY);            // →
+        }
+      }
+    }
+
+    // 片方向: 末尾 → NULL
+    if (!is_doubly) {
+      const lastX = nodeXs[n - 1];
+      const ax1   = lastX + NODE_W;
+      const ax2   = ax1 + ARROW_W;
+      ctx.strokeStyle = "#3a5060";
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath(); ctx.moveTo(ax1, midY); ctx.lineTo(ax2 - 8, midY); ctx.stroke();
+      ctx.fillStyle    = "#3a5060";
+      ctx.font         = "bold 10px monospace";
+      ctx.textAlign    = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("null", ax2 - 8, midY);
+      ctx.textBaseline = "alphabetic";
+    }
+
+    // ── first / last ポインタ ────────────────────────────────────────
+    const ptrY  = areaY + PAD_T - 4;     // 矢印の先端 Y
+    const lblY  = areaY + 14;            // ラベル Y
+
+    const drawPtr = (nodeIdx, color, lbl) => {
+      const px = nodeXs[nodeIdx] + NODE_W / 2;
+      // ラベル
+      ctx.fillStyle    = color;
+      ctx.font         = "bold 11px monospace";
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(lbl, px, lblY);
+      // 縦線
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath(); ctx.moveTo(px, lblY + 2); ctx.lineTo(px, ptrY - 6); ctx.stroke();
+      // 矢印先端
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(px,     ptrY);
+      ctx.lineTo(px - 4, ptrY - 7);
+      ctx.lineTo(px + 4, ptrY - 7);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    drawPtr(0,     "#44cc66", "first");
+    if (n > 1) drawPtr(n - 1, "#4499dd", "last");
+
+    ctx.restore();
+  }
+
+  /** 矢印を描画 (ctx のstrokeStyle/lineWidth を使用) */
+  _arrow(ctx, x1, y1, x2, y2) {
+    const HEAD = 6;
+    const ang  = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - HEAD * Math.cos(ang - Math.PI / 6),
+               y2 - HEAD * Math.sin(ang - Math.PI / 6));
+    ctx.lineTo(x2 - HEAD * Math.cos(ang + Math.PI / 6),
+               y2 - HEAD * Math.sin(ang + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /** 角丸矩形パスを生成 */
+  _rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y,     x + w, y + r,     r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x,     y + h, x,     y + h - r, r);
+    ctx.lineTo(x,     y + r);
+    ctx.arcTo(x,     y,     x + r, y,         r);
+    ctx.closePath();
   }
 }

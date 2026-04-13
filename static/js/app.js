@@ -54,15 +54,13 @@ function _algoType(algoId) {
 // ===== 起動 ========================================================
 window.addEventListener("DOMContentLoaded", async () => {
   await loadMeta();
-  _setupGlobalControls();
   _setupZoomControls();
-  document.getElementById("btn-add-panel")   .addEventListener("click", addPanel);
-  document.getElementById("btn-start-all")   .addEventListener("click", startAll);
-  document.getElementById("btn-pause-all")   .addEventListener("click", pauseAll);
-  document.getElementById("btn-stop-all")    .addEventListener("click", stopAll);
-  document.getElementById("btn-reset-all")   .addEventListener("click", resetAll);
-  document.getElementById("btn-sync-size")   .addEventListener("click", syncSize);
-  document.getElementById("btn-apply-global").addEventListener("click", applyGlobalToAll);
+  document.getElementById("btn-add-panel").addEventListener("click", addPanel);
+  document.getElementById("btn-start-all").addEventListener("click", startAll);
+  document.getElementById("btn-pause-all").addEventListener("click", pauseAll);
+  document.getElementById("btn-stop-all") .addEventListener("click", stopAll);
+  document.getElementById("btn-reset-all").addEventListener("click", resetAll);
+  document.getElementById("btn-sync-size").addEventListener("click", syncSize);
   addPanel();
 });
 
@@ -75,62 +73,6 @@ async function loadMeta() {
   dataSizes  = await dsRes.json();
 }
 
-// ===== 全パネル一括設定 ============================================
-
-function _setupGlobalControls() {
-  const gSize = document.getElementById("global-size");
-  dataSizes.forEach(s => gSize.appendChild(new Option(String(s), s)));
-  gSize.value = 16;
-
-  const gCond = document.getElementById("global-condition");
-  DATA_CONDITIONS.forEach(c => gCond.appendChild(new Option(c.name, c.id)));
-
-  const gSpeed    = document.getElementById("global-speed");
-  const gSpeedVal = document.getElementById("global-speed-val");
-  gSpeed.addEventListener("input", () => {
-    const mult = Math.round(Number(gSpeed.value) / 80 * 10) / 10;
-    gSpeedVal.textContent = `×${mult.toFixed(1)}`;
-  });
-}
-
-/** 全パネルへグローバル設定を適用 */
-function applyGlobalToAll() {
-  const size        = Number(document.getElementById("global-size").value);
-  const speedSlider = Number(document.getElementById("global-speed").value);
-  const condition   = Number(document.getElementById("global-condition").value);
-  let   targetRaw   = document.getElementById("global-target").value.trim();
-  const maxVal      = size >= 200 ? 999 : 99;
-
-  // search 向け: target が空なら共通値を生成
-  if (targetRaw === "") {
-    targetRaw = String(Math.floor(Math.random() * maxVal) + 1);
-    document.getElementById("global-target").value = targetRaw;
-  }
-
-  // search 向け: 共通データを 1 回生成して全パネルで共有
-  const sharedValues = Array.from({ length: size },
-                                   () => Math.floor(Math.random() * maxVal) + 1);
-
-  document.querySelectorAll(".panel").forEach(el => {
-    const panel = el._panel;
-    if (!panel) return;
-    el.querySelector(".rng-speed").value = speedSlider;
-    panel._applySpeed(speedSlider);
-    if (!panel.isRunning) {
-      const type = _algoType(el.querySelector(".sel-algo").value);
-      el.querySelector(".sel-size").value = size;
-      if (type === "search") {
-        el.querySelector(".inp-target").value = targetRaw;
-        panel._applySharedPreview(sharedValues, targetRaw);
-      } else if (type === "sort") {
-        el.querySelector(".sel-condition").value = condition;
-        panel._drawPreview();
-      } else {
-        panel._drawPreview();
-      }
-    }
-  });
-}
 
 // ===== ズーム ======================================================
 

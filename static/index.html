@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ArrayAnimation – 配列アルゴリズム可視化</title>
+  <title>AAforDataStructures – データ構造可視化</title>
   <link rel="stylesheet" href="/static/css/style.css?v=2">
 </head>
 <body>
@@ -12,7 +12,7 @@
   <header>
     <!-- 1行目: タイトル + パネル操作 -->
     <div class="header-row">
-      <h1>ArrayAnimation – 配列アルゴリズム可視化</h1>
+      <h1>AAforDataStructures – データ構造可視化</h1>
       <div id="toolbar">
         <button id="btn-add-panel"  class="btn btn-add">＋ パネル追加</button>
         <button id="btn-start-all"  class="btn btn-success">▶▶ 全開始</button>
@@ -28,34 +28,14 @@
         </div>
       </div>
     </div>
-    <!-- 2行目: 全パネル一括設定 -->
-    <div class="header-row" id="global-controls">
-      <span class="global-label">全パネル一括:</span>
-      <label>データ数
-        <select id="global-size"></select>
-      </label>
-      <label title="探索アルゴリズム用">target
-        <input type="number" id="global-target" min="0" max="999" placeholder="自動"
-               style="width:60px">
-      </label>
-      <label title="ソートアルゴリズム用">データ条件
-        <select id="global-condition"></select>
-      </label>
-      <div class="speed-group">
-        <label>速度</label>
-        <input type="range" id="global-speed" min="1" max="200" value="80" title="大きいほど速い">
-        <span id="global-speed-val">×1.0</span>
-      </div>
-      <button id="btn-apply-global" class="btn btn-secondary">↕ 全パネルへ適用</button>
-    </div>
   </header>
 
   <!-- ===== パネルグリッド ===== -->
   <main id="panels-container"></main>
 
   <!-- ===== スクリプト ===== -->
-  <script src="/static/js/array_canvas.js?v=15"></script>
+  <script src="/static/js/array_canvas.js?v=16"></script>
   <script src="/static/js/ws_client.js?v=1"></script>
-  <script src="/static/js/app.js?v=11"></script>
+  <script src="/static/js/app.js?v=12"></script>
 </body>
 </html>

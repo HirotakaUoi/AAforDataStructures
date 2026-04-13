@@ -3,7 +3,8 @@ algorithms.py – AAforDataStructures
 データ構造アニメーション (Ch.3: vector / Ch.4: 連結リスト)
 
 オブジェクト種別:
-  array1d_cells  – 正方形セル配列（主力）
+  array1d_cells  – 正方形セル配列
+  linked_list    – 矢印接続ノード列
 """
 
 from random import randint
@@ -29,6 +30,23 @@ def _c(id, values, label="", hl=None, fills=None, ptr=None,
 
 def _ptr(index, label, color="#cc00cc"):
     return {"index": index, "label": str(label), "color": color}
+
+def _tape(id, cells, head, label="", color="#4472C4", weight=1):
+    return {
+        "id": id, "type": "tape",
+        "cells": list(cells), "head": int(head),
+        "label": label, "color": color,
+        "weight": weight,
+    }
+
+def _ll(id, nodes, label="", hl=None, is_doubly=False, weight=1):
+    return {
+        "id": id, "type": "linked_list",
+        "nodes": list(nodes), "label": label,
+        "highlights": {str(k): v for k, v in (hl or {}).items()},
+        "is_doubly": is_doubly,
+        "weight": weight,
+    }
 
 
 # ===========================================================================
@@ -141,29 +159,31 @@ def iterator_sum3(n, **kwargs):
     output = []
     i = 0
 
-    yield _f([_c("input", data, "Input"),
+    yield _f([_tape("input", data, 0, "Input"),
               _c("output", [0], "Output (空)", hl={0: "#1a1a2a"})], base)
 
     while i < N:
         grp = [i + k for k in range(3) if i + k < N]
-        hl_in = {k: "yellow" for k in grp}
 
-        yield _f([_c("input", data, "Input", hl=hl_in),
-                  _c("output", list(output) + [0], f"Output  ({len(output)} 要素)",
-                     hl={len(output): "#334455"})],
-                 base + [{"message": f"イテレータ → index {grp}", "color": "lightgreen"}])
+        # テープを 3 要素ぶん 1 つずつスキャン
+        for step, idx in enumerate(grp):
+            yield _f([_tape("input", data, idx, "Input"),
+                      _c("output", list(output) + [0], f"Output  ({len(output)} 要素)",
+                         hl={len(output): "#334455"})],
+                     base + [{"message": f"it → data[{idx}] = {data[idx]}  ({step+1}/3)",
+                               "color": "lightgreen"}])
 
         s = sum(data[j] for j in grp)
         output.append(s)
 
-        yield _f([_c("input", data, "Input", hl=hl_in),
+        yield _f([_tape("input", data, grp[-1], "Input"),
                   _c("output", list(output), f"Output  ({len(output)} 要素)",
                      hl={len(output) - 1: "#ffff44"})],
                  base + [{"message": f"sum = {' + '.join(str(data[j]) for j in grp)} = {s}",
                           "color": "cyan"}])
         i += len(grp)
 
-    yield _f([_c("input", data, "Input"),
+    yield _f([_tape("input", data, N - 1, "Input"),
               _c("output", output, f"Output  ({len(output)} 要素)")],
              base + [{"message": f"完了: {len(output)} 個の合計を計算", "color": "#44aa44"}],
              finished=True)
@@ -178,28 +198,17 @@ def singly_linked_list(n, **kwargs):
     base = [{"message": "片方向連結リスト  (Sample4_2)", "color": "white"}]
     vals = []
 
-    def ll_hl(extra=None):
-        h = dict(extra or {})
-        if vals:
-            if 0 not in h:
-                h[0] = "#44aa44"              # first: 緑
-            if len(vals) - 1 not in h:
-                h[len(vals) - 1] = "#4488cc"  # last:  青
-        return h
-
     def frame(extra_hl=None, msg="", color="lightgreen", finished=False):
-        display = list(vals) if vals else [0]
-        return _f([_c("list", display, "Linked List  first ──→ last", hl=ll_hl(extra_hl))],
+        nodes = list(vals) if vals else []
+        return _f([_ll("list", nodes, "Singly Linked List", hl=extra_hl or {}, is_doubly=False)],
                   base + [{"message": msg, "color": color}], finished=finished)
 
     def traverse_and_delete(target):
-        """target を線形探索してフレームを生成し、削除する"""
         idx = vals.index(target)
         for i in range(idx + 1):
             found = (vals[i] == target)
-            h = {0: "#44aa44", len(vals) - 1: "#4488cc",
-                 i: "#ff4444" if found else "yellow"}
-            yield _f([_c("list", list(vals), "Linked List", hl=h)],
+            h = {i: "#ff4444" if found else "yellow"}
+            yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
                      base + [{"message": f"[{i}] = {vals[i]}  {'→ 削除!' if found else '→ 次へ'}",
                               "color": "red" if found else "lightgreen"}])
         vals.pop(idx)
@@ -227,8 +236,7 @@ def singly_linked_list(n, **kwargs):
 
     # deleteFirst()
     old_first = vals[0]
-    yield _f([_c("list", list(vals), "Linked List",
-                 hl={0: "#ff4444", len(vals) - 1: "#4488cc"})],
+    yield _f([_ll("list", list(vals), "Singly Linked List", hl={0: "#ff4444"})],
              base + [{"message": f"deleteFirst(): 先頭 {old_first} を削除", "color": "orange"}])
     vals.pop(0)
     yield frame(msg=f"deleteFirst() 完了  →  先頭={vals[0]}")
@@ -238,9 +246,8 @@ def singly_linked_list(n, **kwargs):
     yield frame(msg=f"find({target_find}): 線形探索...")
     for i in range(len(vals)):
         found = (vals[i] == target_find)
-        h = {0: "#44aa44", len(vals) - 1: "#4488cc",
-             i: "#ff4444" if found else "yellow"}
-        yield _f([_c("list", list(vals), "Linked List", hl=h)],
+        h = {i: "#ff4444" if found else "yellow"}
+        yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
                  base + [{"message": f"[{i}] = {vals[i]}  {'→ 発見!' if found else '→ 次へ'}",
                           "color": "red" if found else "lightgreen"}])
         if found:
@@ -259,28 +266,18 @@ def doubly_linked_list(n, **kwargs):
     base = [{"message": "双方向連結リスト  (Sample4_5)", "color": "white"}]
     vals = []
 
-    def dll_hl(extra=None):
-        h = dict(extra or {})
-        if vals:
-            if 0 not in h:
-                h[0] = "#44aa44"
-            if len(vals) - 1 not in h:
-                h[len(vals) - 1] = "#4488cc"
-        return h
-
     def frame(extra_hl=None, msg="", color="lightgreen", finished=False, objs=None):
         if objs is None:
-            display = list(vals) if vals else [0]
-            objs = [_c("list", display, "Doubly Linked List  (←→)", hl=dll_hl(extra_hl))]
+            nodes = list(vals) if vals else []
+            objs = [_ll("list", nodes, "Doubly Linked List", hl=extra_hl or {}, is_doubly=True)]
         return _f(objs, base + [{"message": msg, "color": color}], finished=finished)
 
     def traverse_and_delete(target):
         idx = vals.index(target)
         for i in range(idx + 1):
             found = (vals[i] == target)
-            h = {0: "#44aa44", len(vals) - 1: "#4488cc",
-                 i: "#ff4444" if found else "yellow"}
-            yield _f([_c("list", list(vals), "Doubly Linked List  (←→)", hl=h)],
+            h = {i: "#ff4444" if found else "yellow"}
+            yield _f([_ll("list", list(vals), "Doubly Linked List", hl=h, is_doubly=True)],
                      base + [{"message": f"[{i}] = {vals[i]}  {'→ 削除!' if found else '→ 次へ'}",
                               "color": "red" if found else "lightgreen"}])
         vals.pop(idx)
@@ -309,15 +306,15 @@ def doubly_linked_list(n, **kwargs):
     # display() — 先頭から順方向に走査
     yield frame(msg="display(): 先頭から順に走査 →")
     for i in range(len(vals)):
-        h = {0: "#44aa44", len(vals) - 1: "#4488cc", i: "yellow"}
-        yield _f([_c("list", list(vals), "Doubly Linked List  (→)", hl=h)],
+        h = {i: "yellow"}
+        yield _f([_ll("list", list(vals), "Doubly Linked List  (→)", hl=h, is_doubly=True)],
                  base + [{"message": f"→  {vals[i]}", "color": "lightgreen"}])
 
     # displayReverse() — 末尾から逆方向に走査
     yield frame(msg="displayReverse(): 末尾から逆順に走査 ←")
     for i in range(len(vals) - 1, -1, -1):
-        h = {0: "#44aa44", len(vals) - 1: "#4488cc", i: "yellow"}
-        yield _f([_c("list", list(vals), "Doubly Linked List  (←)", hl=h)],
+        h = {i: "yellow"}
+        yield _f([_ll("list", list(vals), "Doubly Linked List  (←)", hl=h, is_doubly=True)],
                  base + [{"message": f"←  {vals[i]}", "color": "cyan"}])
 
     # reverse() — 逆順リストを生成して並べて表示
@@ -327,12 +324,307 @@ def doubly_linked_list(n, **kwargs):
         color="cyan",
         finished=True,
         objs=[
-            _c("list", list(vals), "元のリスト",
-               hl={0: "#44aa44", len(vals) - 1: "#4488cc"}),
-            _c("rev",  rev,        "reversed リスト",
-               hl={0: "#44aa44", len(rev) - 1: "#4488cc"}),
+            _ll("list", list(vals), "元のリスト", is_doubly=True),
+            _ll("rev",  rev,        "reversed リスト", is_doubly=True),
         ],
     )
+
+
+# ===========================================================================
+# Ch.5: スタック / キュー / RPN (type: "misc")
+# ===========================================================================
+
+def stack_linked_list(n, **kwargs):
+    """Sample5_1: 連結リストによるスタックの Push/Pop"""
+    base = [{"message": "連結リストスタック  (Sample5_1)", "color": "white"}]
+    vals = []   # vals[0] = top (先頭が top)
+
+    def frame(hl=None, msg="", color="lightgreen", finished=False):
+        return _f([_ll("stack", list(vals), "Stack  top → … → bottom",
+                       hl=hl or {}, is_doubly=False)],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(msg="スタック生成 (空)")
+
+    for v in [3, 7, 1, 5, 2, 8]:
+        vals.insert(0, v)                  # Push: 先頭に追加
+        yield frame({0: "yellow"}, msg=f"Push({v})  top={vals[0]}  size={len(vals)}")
+
+    yield frame(msg=f"isEmpty? = {len(vals) == 0}", color="cyan")
+
+    for _ in range(3):
+        val = vals[0]
+        yield frame({0: "#ff4444"}, msg=f"Pop() = {val}  (top を削除)", color="orange")
+        vals.pop(0)
+        new_top = str(vals[0]) if vals else "None"
+        yield frame(msg=f"Pop 完了  新 top={new_top}  size={len(vals)}")
+
+    for v in [9, 4]:
+        vals.insert(0, v)
+        yield frame({0: "yellow"}, msg=f"Push({v})  top={vals[0]}  size={len(vals)}")
+
+    yield frame(msg="全 Pop 開始...")
+    while vals:
+        val = vals[0]
+        yield frame({0: "#ff4444"}, msg=f"Pop() = {val}", color="orange")
+        vals.pop(0)
+
+    yield frame(msg="isEmpty? = True  全操作完了", color="#44aa44", finished=True)
+
+
+def queue_linked_list(n, **kwargs):
+    """Sample5_8: 連結リストによるキューの Enqueue/Dequeue"""
+    base = [{"message": "連結リストキュー  (Sample5_8)", "color": "white"}]
+    vals = []   # vals[0] = front, vals[-1] = back
+
+    def frame(hl=None, msg="", color="lightgreen", finished=False):
+        return _f([_ll("queue", list(vals), "Queue  front → … → back",
+                       hl=hl or {}, is_doubly=False)],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(msg="キュー生成 (空)")
+
+    for v in [3, 7, 1, 5, 2, 8]:
+        vals.append(v)                     # Enqueue: 末尾に追加
+        yield frame({len(vals) - 1: "yellow"},
+                    msg=f"Enqueue({v})  back={vals[-1]}  size={len(vals)}")
+
+    yield frame(msg=f"isEmpty? = {len(vals) == 0}", color="cyan")
+
+    for _ in range(3):
+        val = vals[0]
+        yield frame({0: "#ff4444"}, msg=f"Dequeue() = {val}  (front を削除)", color="orange")
+        vals.pop(0)
+        new_front = str(vals[0]) if vals else "None"
+        yield frame(msg=f"Dequeue 完了  新 front={new_front}  size={len(vals)}")
+
+    for v in [9, 4, 6]:
+        vals.append(v)
+        yield frame({len(vals) - 1: "yellow"},
+                    msg=f"Enqueue({v})  back={vals[-1]}  size={len(vals)}")
+
+    yield frame(msg="全 Dequeue 開始...")
+    while vals:
+        val = vals[0]
+        yield frame({0: "#ff4444"}, msg=f"Dequeue() = {val}", color="orange")
+        vals.pop(0)
+
+    yield frame(msg="isEmpty? = True  全操作完了", color="#44aa44", finished=True)
+
+
+
+def stack_array(n, **kwargs):
+    """Sample5_4: 配列によるスタックの Push/Pop"""
+    MAXSIZE = 8
+    base = [{"message": "配列スタック  (Sample5_4)", "color": "white"}]
+    data = [0] * MAXSIZE
+    top = -1
+
+    def frame(hl_extra=None, msg="", color="lightgreen", finished=False):
+        hl = {i: "#0e1e0e" for i in range(top + 1, MAXSIZE)}   # 未使用セル: 暗
+        if top >= 0:
+            hl[top] = "#44cc66"                                  # top 要素: 緑
+        if hl_extra:
+            hl.update(hl_extra)
+        ptr = _ptr(top, "top", "#44cc66") if top >= 0 else None
+        return _f([_c("stack", list(data),
+                       f"Stack  max={MAXSIZE},  top={top}", hl=hl, ptr=ptr)],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(msg="スタック生成 (空)  top=-1")
+
+    for v in [3, 7, 1, 5, 2, 8]:
+        top += 1
+        data[top] = v
+        yield frame({top: "yellow"}, msg=f"Push({v})  →  top={top}")
+
+    yield frame(msg=f"isFull? = {top == MAXSIZE - 1}", color="cyan")
+
+    for _ in range(3):
+        val = data[top]
+        yield frame({top: "#ff4444"}, msg=f"Pop() = {val}  (top={top})", color="orange")
+        data[top] = 0
+        top -= 1
+        yield frame(msg=f"Pop 完了  top={top}")
+
+    for v in [9, 4]:
+        top += 1
+        data[top] = v
+        yield frame({top: "yellow"}, msg=f"Push({v})  →  top={top}")
+
+    yield frame(msg="全 Pop 開始...")
+    while top >= 0:
+        val = data[top]
+        yield frame({top: "#ff4444"}, msg=f"Pop() = {val}", color="orange")
+        data[top] = 0
+        top -= 1
+
+    yield frame(msg=f"isEmpty? = {top == -1}  全操作完了", color="#44aa44", finished=True)
+
+
+def queue_circular(n, **kwargs):
+    """Sample5_9: 配列による循環キューの Enqueue/Dequeue"""
+    MAXSIZE = 8
+    base = [{"message": "循環キュー (配列)  (Sample5_9)", "color": "white"}]
+    data = [0] * MAXSIZE
+    front = back = count = 0
+
+    def frame(hl_extra=None, msg="", color="lightgreen", finished=False):
+        hl = {}
+        # 有効データ領域を薄く着色
+        idx = front
+        for _ in range(count):
+            hl[idx] = "#1a3a2a"
+            idx = (idx + 1) % MAXSIZE
+        # front (緑) / back-1 (青) を強調
+        if count > 0:
+            hl[front] = "#44cc66"
+            hl[(back - 1) % MAXSIZE] = "#4499dd"
+        if hl_extra:
+            hl.update(hl_extra)
+        ptr = _ptr(front, "front", "#44cc66")
+        return _f([_c("queue", list(data),
+                       f"CircularQueue  max={MAXSIZE}  count={count}  front={front}  back={back % MAXSIZE}",
+                       hl=hl, ptr=ptr)],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(msg="循環キュー生成 (空)")
+
+    for v in [1, 2, 3, 4, 5, 6]:
+        data[back] = v
+        back = (back + 1) % MAXSIZE
+        count += 1
+        yield frame({(back - 1) % MAXSIZE: "yellow"}, msg=f"Enqueue({v})  count={count}  back={back % MAXSIZE}")
+
+    yield frame(msg=f"isFull? = {count == MAXSIZE}", color="cyan")
+
+    for _ in range(3):
+        val = data[front]
+        yield frame({front: "#ff4444"}, msg=f"Dequeue() = {val}  front={front}", color="orange")
+        data[front] = 0
+        front = (front + 1) % MAXSIZE
+        count -= 1
+        yield frame(msg=f"Dequeue 完了  count={count}  front={front}")
+
+    for v in [7, 8, 9, 10]:
+        data[back] = v
+        back = (back + 1) % MAXSIZE
+        count += 1
+        yield frame({(back - 1) % MAXSIZE: "yellow"},
+                    msg=f"Enqueue({v})  count={count}  back={back % MAXSIZE}  ← 循環ラップ!")
+
+    yield frame(msg="全 Dequeue 開始...")
+    while count > 0:
+        val = data[front]
+        yield frame({front: "#ff4444"}, msg=f"Dequeue() = {val}", color="orange")
+        data[front] = 0
+        front = (front + 1) % MAXSIZE
+        count -= 1
+
+    yield frame(msg=f"isEmpty? = {count == 0}  全操作完了", color="#44aa44", finished=True)
+
+
+def rpn_eval(n, **kwargs):
+    """Sample5_7: B型単純式 → 逆ポーランド記法変換 + スタック評価"""
+    # B型単純式: *(+(2 3) -(8 1))  → RPN: 2 3 + 8 1 - *  → 結果: 35
+    expr = list("*(+(2 3) -(8 1))")
+    expr_str = "".join(expr)
+    base = [{"message": f"B型単純式 → RPN  (Sample5_7)  式: {expr_str}", "color": "white"}]
+
+    oprs = []    # 演算子スタック (char)
+    output = []  # 出力トークンリスト
+    opr = ' '
+
+    PAD = 8  # 表示用パディング幅
+
+    def cvt_frame(ci, msg, color="lightgreen"):
+        s_disp = list(oprs) + [' '] * max(0, PAD - len(oprs))
+        s_hl   = {i: "#0e0e1e" for i in range(len(oprs), PAD)}
+        if oprs:
+            s_hl[len(oprs) - 1] = "#ff8844"   # stack top: オレンジ
+        o_disp = list(output) + [' '] * max(0, PAD - len(output))
+        o_hl   = {i: "#ffff44" for i in range(len(output))}
+        o_hl.update({i: "#0e0e1e" for i in range(len(output), PAD)})
+        return _f([
+            _tape("expr", expr, ci, "B型式", "#9966cc"),
+            _c("oprs", s_disp, f"演算子スタック ({len(oprs)})", hl=s_hl,
+               ptr=_ptr(len(oprs) - 1, "top", "#ff8844") if oprs else None),
+            _c("out",  o_disp, f"出力 ({len(output)} トークン)", hl=o_hl),
+        ], base + [{"message": msg, "color": color}])
+
+    yield cvt_frame(0, "変換開始")
+
+    for ci, c in enumerate(expr):
+        if c in '+-*/':
+            opr = c
+            yield cvt_frame(ci, f"演算子 '{c}' を一時保存  opr='{opr}'", color="cyan")
+        elif c == '(':
+            if opr != ' ':
+                oprs.append(opr)
+                opr = ' '
+                yield cvt_frame(ci, f"'(' → opr をスタックに Push: '{oprs[-1]}'", color="#ff8844")
+            else:
+                yield cvt_frame(ci, "'(' スキップ (opr なし)")
+        elif c == ')':
+            if oprs:
+                popped = oprs.pop()
+                output.append(popped)
+                yield cvt_frame(ci, f"')' → Pop '{popped}' して出力", color="orange")
+        elif c.isdigit():
+            output.append(c)
+            yield cvt_frame(ci, f"数字 '{c}' を出力", color="lightgreen")
+            if opr != ' ':
+                output.append(opr)
+                opr = ' '
+                yield cvt_frame(ci, f"保存演算子 '{output[-1]}' も出力", color="cyan")
+
+    while oprs:
+        popped = oprs.pop()
+        output.append(popped)
+        yield cvt_frame(len(expr) - 1, f"残り演算子 '{popped}' を出力", color="orange")
+
+    rpn_str = " ".join(output)
+    o_disp = list(output) + [' '] * max(0, PAD - len(output))
+    o_hl   = {i: "#44aaff" for i in range(len(output))}
+    o_hl.update({i: "#0e0e1e" for i in range(len(output), PAD)})
+    yield _f([_c("rpn", o_disp, f"RPN: {rpn_str}", hl=o_hl)],
+             base + [{"message": f"変換完了!  RPN = {rpn_str}", "color": "cyan"}])
+
+    # ── RPN 評価フェーズ ──
+    base2 = [{"message": f"RPN 評価: {rpn_str}", "color": "white"}]
+    nums = []
+
+    def eval_frame(ti, msg, color="lightgreen", finished=False):
+        n_disp = [str(x) for x in nums] + [' '] * max(0, PAD - len(nums))
+        n_hl   = {i: "#0e0e1e" for i in range(len(nums), PAD)}
+        if nums:
+            n_hl[len(nums) - 1] = "#44cc66"   # top: 緑
+        r_disp = list(output) + [' '] * max(0, PAD - len(output))
+        r_hl   = {ti: "#ff8844"} if ti < len(output) else {}
+        return _f([
+            _tape("rpn", output, ti, "RPN", "#4499cc"),
+            _c("nums", n_disp, f"数値スタック ({len(nums)})", hl=n_hl,
+               ptr=_ptr(len(nums) - 1, "top", "#44cc66") if nums else None),
+        ], base2 + [{"message": msg, "color": color}], finished=finished)
+
+    yield eval_frame(0, "RPN 評価開始")
+
+    for ti, tok in enumerate(output):
+        if tok in '+-*/':
+            b = nums.pop()
+            a = nums.pop()
+            res = (a + b if tok == '+' else a - b if tok == '-'
+                   else a * b if tok == '*' else a // b)
+            nums.append(res)
+            yield eval_frame(ti, f"{a} {tok} {b} = {res}  → Push({res})", color="orange")
+        elif tok.isdigit():
+            nums.append(int(tok))
+            yield eval_frame(ti, f"数字 '{tok}' → Push({tok})", color="lightgreen")
+
+    result = nums[0] if nums else '?'
+    yield _f([_c("result", [str(result)], f"結果 = {result}", hl={0: "#44cc66"})],
+             base2 + [{"message": f"評価完了!  {expr_str} = {result}", "color": "#44aa44"}],
+             finished=True)
 
 
 # ===========================================================================
@@ -347,6 +639,12 @@ AlgorithmList = [
     # ── Ch.4: 連結リスト ──
     ("片方向連結リスト  (Ch.4)",    singly_linked_list, {"type": "misc"}),
     ("双方向連結リスト  (Ch.4)",    doubly_linked_list, {"type": "misc"}),
+    # ── Ch.5: スタック / キュー / RPN ──
+    ("連結リストスタック  (Ch.5)",  stack_linked_list,  {"type": "misc"}),
+    ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc"}),
+    ("配列スタック  (Ch.5)",        stack_array,        {"type": "misc"}),
+    ("循環キュー  (Ch.5)",          queue_circular,     {"type": "misc"}),
+    ("RPN 変換・評価  (Ch.5)",      rpn_eval,           {"type": "misc"}),
 ]
 
 DataSizeList = [8, 12, 16, 20, 24]
