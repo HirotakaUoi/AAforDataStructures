@@ -39,14 +39,18 @@ def _tape(id, cells, head, label="", color="#4472C4", weight=1):
         "weight": weight,
     }
 
-def _ll(id, nodes, label="", hl=None, is_doubly=False, is_vertical=False, weight=1):
-    return {
+def _ll(id, nodes, label="", hl=None, is_doubly=False, is_vertical=False,
+        ptr_labels=None, ptr_colors=None, weight=1):
+    obj = {
         "id": id, "type": "linked_list",
         "nodes": list(nodes), "label": label,
         "highlights": {str(k): v for k, v in (hl or {}).items()},
         "is_doubly": is_doubly, "is_vertical": is_vertical,
         "weight": weight,
     }
+    if ptr_labels: obj["ptr_labels"] = ptr_labels
+    if ptr_colors: obj["ptr_colors"] = ptr_colors
+    return obj
 
 def _stack_v(id, values, top, max_size, label="", hl=None, weight=1):
     return {
@@ -220,7 +224,8 @@ def singly_linked_list(n, **kwargs):
     def frame(extra_hl=None, msg="", color="lightgreen", finished=False):
         nodes = list(vals) if vals else []
         return _f([_ll("list", nodes, "Singly Linked List", hl=extra_hl or {}, is_doubly=False)],
-                  base + [{"message": msg, "color": color}], finished=finished)
+                  base + [{"message": msg, "color": color}], finished=finished,
+                  text_position="bottom")
 
     def traverse_and_delete(target):
         idx = vals.index(target)
@@ -229,7 +234,8 @@ def singly_linked_list(n, **kwargs):
             h = {i: "#ff4444" if found else "yellow"}
             yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
                      base + [{"message": f"[{i}] = {vals[i]}  {'→ 削除!' if found else '→ 次へ'}",
-                              "color": "red" if found else "lightgreen"}])
+                              "color": "red" if found else "lightgreen"}],
+                     text_position="bottom")
         vals.pop(idx)
 
     yield frame(msg="連結リスト生成 (空)")
@@ -268,7 +274,8 @@ def singly_linked_list(n, **kwargs):
         h = {i: "#ff4444" if found else "yellow"}
         yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
                  base + [{"message": f"[{i}] = {vals[i]}  {'→ 発見!' if found else '→ 次へ'}",
-                          "color": "red" if found else "lightgreen"}])
+                          "color": "red" if found else "lightgreen"}],
+                 text_position="bottom")
         if found:
             break
 
@@ -289,7 +296,8 @@ def doubly_linked_list(n, **kwargs):
         if objs is None:
             nodes = list(vals) if vals else []
             objs = [_ll("list", nodes, "Doubly Linked List", hl=extra_hl or {}, is_doubly=True)]
-        return _f(objs, base + [{"message": msg, "color": color}], finished=finished)
+        return _f(objs, base + [{"message": msg, "color": color}], finished=finished,
+                  text_position="bottom")
 
     def traverse_and_delete(target):
         idx = vals.index(target)
@@ -298,7 +306,8 @@ def doubly_linked_list(n, **kwargs):
             h = {i: "#ff4444" if found else "yellow"}
             yield _f([_ll("list", list(vals), "Doubly Linked List", hl=h, is_doubly=True)],
                      base + [{"message": f"[{i}] = {vals[i]}  {'→ 削除!' if found else '→ 次へ'}",
-                              "color": "red" if found else "lightgreen"}])
+                              "color": "red" if found else "lightgreen"}],
+                     text_position="bottom")
         vals.pop(idx)
 
     yield frame(msg="双方向連結リスト生成 (空)")
@@ -327,14 +336,16 @@ def doubly_linked_list(n, **kwargs):
     for i in range(len(vals)):
         h = {i: "yellow"}
         yield _f([_ll("list", list(vals), "Doubly Linked List  (→)", hl=h, is_doubly=True)],
-                 base + [{"message": f"→  {vals[i]}", "color": "lightgreen"}])
+                 base + [{"message": f"→  {vals[i]}", "color": "lightgreen"}],
+                 text_position="bottom")
 
     # displayReverse() — 末尾から逆方向に走査
     yield frame(msg="displayReverse(): 末尾から逆順に走査 ←")
     for i in range(len(vals) - 1, -1, -1):
         h = {i: "yellow"}
         yield _f([_ll("list", list(vals), "Doubly Linked List  (←)", hl=h, is_doubly=True)],
-                 base + [{"message": f"←  {vals[i]}", "color": "cyan"}])
+                 base + [{"message": f"←  {vals[i]}", "color": "cyan"}],
+                 text_position="bottom")
 
     # reverse() — 逆順リストを生成して並べて表示
     rev = list(reversed(vals))
@@ -360,7 +371,8 @@ def stack_linked_list(n, **kwargs):
 
     def frame(hl=None, msg="", color="lightgreen", finished=False):
         return _f([_ll("stack", list(vals), "Stack  (top → bottom)",
-                       hl=hl or {}, is_doubly=False, is_vertical=True)],
+                       hl=hl or {}, is_doubly=False, is_vertical=True,
+                       ptr_labels=["top", "bottom"], ptr_colors=["#44cc66", "#4499dd"])],
                   base + [{"message": msg, "color": color}], finished=finished)
 
     yield frame(msg="スタック生成 (空)")
@@ -398,8 +410,10 @@ def queue_linked_list(n, **kwargs):
 
     def frame(hl=None, msg="", color="lightgreen", finished=False):
         return _f([_ll("queue", list(vals), "Queue  front → … → back",
-                       hl=hl or {}, is_doubly=False)],
-                  base + [{"message": msg, "color": color}], finished=finished)
+                       hl=hl or {}, is_doubly=False,
+                       ptr_labels=["front", "back"], ptr_colors=["#44cc66", "#ff8844"])],
+                  base + [{"message": msg, "color": color}], finished=finished,
+                  text_position="bottom")
 
     yield frame(msg="キュー生成 (空)")
 
