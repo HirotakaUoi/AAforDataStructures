@@ -1165,10 +1165,11 @@ class ArrayCanvas {
     }
 
     // ── first / last ポインタ（ノード上端に密着バッジ） ──────────────
-    const BADGE_H = 13;   // バッジの高さ
-    const TRI_H   = 5;    // ノード側への小三角の高さ
-    // バッジ下端をノード上端に合わせる（gap=0, ノードと接する）
-    const badgeBot = nodeY;
+    const BADGE_H  = 13;   // バッジの高さ
+    const GAP      = 10;   // バッジ下端～ノード上端の隙間
+    const TRI_H    = 5;    // ノード側への小三角の高さ
+    // バッジ下端 = ノード上端 - GAP
+    const badgeBot = nodeY - GAP;
     const badgeTop = badgeBot - BADGE_H;
 
     const drawPtr = (nodeIdx, color, lbl) => {
@@ -1184,6 +1185,9 @@ class ArrayCanvas {
       ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(lbl, px, badgeTop + BADGE_H / 2);
       ctx.textBaseline = "alphabetic";
+      // 縦線（バッジ下端→ノード上端）
+      ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(px, badgeBot); ctx.lineTo(px, nodeY); ctx.stroke();
       // ノードへの小三角（下向き）
       ctx.fillStyle = color;
       ctx.beginPath();
