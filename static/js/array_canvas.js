@@ -1050,8 +1050,8 @@ class ArrayCanvas {
     // ── レイアウト定数 ──────────────────────────────────────────────
     const PAD_L   = 14;
     const PAD_R   = 14;
-    const PAD_T   = 32;   // first/last ラベル用の上余白
-    const PAD_B   = 10;
+    const PAD_T   = 44;   // ラベル(12px) + バッジ(13px) + 余白
+    const PAD_B   = 52;   // 底部テキストオーバーレイ(≈48px) を避ける
 
     const availW  = cw - PAD_L - PAD_R;
     const availH  = areaH - PAD_T - PAD_B;
@@ -1164,36 +1164,32 @@ class ArrayCanvas {
       ctx.textBaseline = "alphabetic";
     }
 
-    // ── first / last ポインタ（バッジ形式） ──────────────────────────
-    const ptrY  = areaY + PAD_T - 4;     // 矢印の先端 Y
-    const lblY  = areaY + 14;            // バッジ中心 Y
+    // ── first / last ポインタ（ノード上端に密着バッジ） ──────────────
+    const BADGE_H = 13;   // バッジの高さ
+    const TRI_H   = 5;    // ノード側への小三角の高さ
+    // バッジ下端をノード上端に合わせる（gap=0, ノードと接する）
+    const badgeBot = nodeY;
+    const badgeTop = badgeBot - BADGE_H;
 
     const drawPtr = (nodeIdx, color, lbl) => {
-      const px   = nodeXs[nodeIdx] + NODE_W / 2;
-      ctx.font   = "bold 11px monospace";
-      const tw   = ctx.measureText(lbl).width;
-      const bw   = tw + 10, bh = 15, br = 4;
+      const px = nodeXs[nodeIdx] + NODE_W / 2;
+      ctx.font = "bold 10px monospace";
+      const tw = ctx.measureText(lbl).width;
+      const bw = tw + 8, br = 3;
       // バッジ背景
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = color;
-      this._rrect(ctx, px - bw/2, lblY - bh + 2, bw, bh, br); ctx.fill();
+      ctx.save(); ctx.globalAlpha = 0.92; ctx.fillStyle = color;
+      this._rrect(ctx, px - bw/2, badgeTop, bw, BADGE_H, br); ctx.fill();
       ctx.restore();
       // バッジテキスト
-      ctx.fillStyle    = "#0d1117";
-      ctx.textAlign    = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(lbl, px, lblY - bh/2 + 2);
+      ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(lbl, px, badgeTop + BADGE_H / 2);
       ctx.textBaseline = "alphabetic";
-      // 縦線
-      ctx.strokeStyle = color; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(px, lblY + 2); ctx.lineTo(px, ptrY - 6); ctx.stroke();
-      // 矢印先端（下向き三角）
+      // ノードへの小三角（下向き）
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(px,     ptrY);
-      ctx.lineTo(px - 4, ptrY - 7);
-      ctx.lineTo(px + 4, ptrY - 7);
+      ctx.moveTo(px - 4, nodeY);
+      ctx.lineTo(px + 4, nodeY);
+      ctx.lineTo(px,     nodeY + TRI_H);
       ctx.closePath(); ctx.fill();
     };
 
