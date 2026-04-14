@@ -39,12 +39,31 @@ def _tape(id, cells, head, label="", color="#4472C4", weight=1):
         "weight": weight,
     }
 
-def _ll(id, nodes, label="", hl=None, is_doubly=False, weight=1):
+def _ll(id, nodes, label="", hl=None, is_doubly=False, is_vertical=False, weight=1):
     return {
         "id": id, "type": "linked_list",
         "nodes": list(nodes), "label": label,
         "highlights": {str(k): v for k, v in (hl or {}).items()},
-        "is_doubly": is_doubly,
+        "is_doubly": is_doubly, "is_vertical": is_vertical,
+        "weight": weight,
+    }
+
+def _stack_v(id, values, top, max_size, label="", hl=None, weight=1):
+    return {
+        "id": id, "type": "stack_v",
+        "values": list(values), "top": int(top), "max_size": int(max_size),
+        "label": label,
+        "highlights": {str(k): v for k, v in (hl or {}).items()},
+        "weight": weight,
+    }
+
+def _queue_circ(id, values, front, back, count, label="", hl=None, weight=1):
+    return {
+        "id": id, "type": "queue_circ",
+        "values": list(values), "front": int(front),
+        "back": int(back % len(values)) if values else 0,
+        "count": int(count), "label": label,
+        "highlights": {str(k): v for k, v in (hl or {}).items()},
         "weight": weight,
     }
 
@@ -335,13 +354,13 @@ def doubly_linked_list(n, **kwargs):
 # ===========================================================================
 
 def stack_linked_list(n, **kwargs):
-    """Sample5_1: 連結リストによるスタックの Push/Pop"""
+    """Sample5_1: 連結リストによるスタックの Push/Pop（縦方向表示）"""
     base = [{"message": "連結リストスタック  (Sample5_1)", "color": "white"}]
     vals = []   # vals[0] = top (先頭が top)
 
     def frame(hl=None, msg="", color="lightgreen", finished=False):
-        return _f([_ll("stack", list(vals), "Stack  top → … → bottom",
-                       hl=hl or {}, is_doubly=False)],
+        return _f([_ll("stack", list(vals), "Stack  (top → bottom)",
+                       hl=hl or {}, is_doubly=False, is_vertical=True)],
                   base + [{"message": msg, "color": color}], finished=finished)
 
     yield frame(msg="スタック生成 (空)")
@@ -414,21 +433,16 @@ def queue_linked_list(n, **kwargs):
 
 
 def stack_array(n, **kwargs):
-    """Sample5_4: 配列によるスタックの Push/Pop"""
+    """Sample5_4: 配列によるスタックの Push/Pop（縦方向表示）"""
     MAXSIZE = 8
     base = [{"message": "配列スタック  (Sample5_4)", "color": "white"}]
     data = [0] * MAXSIZE
     top = -1
 
     def frame(hl_extra=None, msg="", color="lightgreen", finished=False):
-        hl = {i: "#0e1e0e" for i in range(top + 1, MAXSIZE)}   # 未使用セル: 暗
-        if top >= 0:
-            hl[top] = "#44cc66"                                  # top 要素: 緑
-        if hl_extra:
-            hl.update(hl_extra)
-        ptr = _ptr(top, "top", "#44cc66") if top >= 0 else None
-        return _f([_c("stack", list(data),
-                       f"Stack  max={MAXSIZE},  top={top}", hl=hl, ptr=ptr)],
+        hl = hl_extra or {}
+        return _f([_stack_v("stack", list(data), top, MAXSIZE,
+                            f"Stack  max={MAXSIZE}", hl=hl)],
                   base + [{"message": msg, "color": color}], finished=finished)
 
     yield frame(msg="スタック生成 (空)  top=-1")
@@ -463,29 +477,16 @@ def stack_array(n, **kwargs):
 
 
 def queue_circular(n, **kwargs):
-    """Sample5_9: 配列による循環キューの Enqueue/Dequeue"""
+    """Sample5_9: 配列による循環キューの Enqueue/Dequeue（円形表示）"""
     MAXSIZE = 8
     base = [{"message": "循環キュー (配列)  (Sample5_9)", "color": "white"}]
     data = [0] * MAXSIZE
     front = back = count = 0
 
     def frame(hl_extra=None, msg="", color="lightgreen", finished=False):
-        hl = {}
-        # 有効データ領域を薄く着色
-        idx = front
-        for _ in range(count):
-            hl[idx] = "#1a3a2a"
-            idx = (idx + 1) % MAXSIZE
-        # front (緑) / back-1 (青) を強調
-        if count > 0:
-            hl[front] = "#44cc66"
-            hl[(back - 1) % MAXSIZE] = "#4499dd"
-        if hl_extra:
-            hl.update(hl_extra)
-        ptr = _ptr(front, "front", "#44cc66")
-        return _f([_c("queue", list(data),
-                       f"CircularQueue  max={MAXSIZE}  count={count}  front={front}  back={back % MAXSIZE}",
-                       hl=hl, ptr=ptr)],
+        hl = hl_extra or {}
+        return _f([_queue_circ("queue", list(data), front, back, count,
+                               f"CircularQueue  max={MAXSIZE}  count={count}", hl=hl)],
                   base + [{"message": msg, "color": color}], finished=finished)
 
     yield frame(msg="循環キュー生成 (空)")
@@ -494,7 +495,8 @@ def queue_circular(n, **kwargs):
         data[back] = v
         back = (back + 1) % MAXSIZE
         count += 1
-        yield frame({(back - 1) % MAXSIZE: "yellow"}, msg=f"Enqueue({v})  count={count}  back={back % MAXSIZE}")
+        yield frame({(back - 1) % MAXSIZE: "yellow"},
+                    msg=f"Enqueue({v})  count={count}  back={back % MAXSIZE}")
 
     yield frame(msg=f"isFull? = {count == MAXSIZE}", color="cyan")
 

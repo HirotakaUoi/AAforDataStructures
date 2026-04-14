@@ -51,6 +51,8 @@ class ArrayCanvas {
           case "fib_tree":      this._drawFibTree(obj, areaY, eachH);      break;
           case "staircase":     this._drawStaircase(obj, areaY, eachH);    break;
           case "linked_list":   this._drawLinkedList(obj, areaY, eachH);   break;
+          case "stack_v":       this._drawStackV(obj, areaY, eachH);       break;
+          case "queue_circ":    this._drawQueueCirc(obj, areaY, eachH);    break;
         }
         areaY += eachH;
       }
@@ -1032,6 +1034,7 @@ class ArrayCanvas {
   // linked_list – 連結リスト（ノード＋矢印）
   // ════════════════════════════════════════════════════════════════════
   _drawLinkedList(obj, areaY, areaH) {
+    if (obj.is_vertical) { this._drawLinkedListV(obj, areaY, areaH); return; }
     const {
       nodes      = [],
       label      = "",
@@ -1187,6 +1190,311 @@ class ArrayCanvas {
 
     drawPtr(0,     "#44cc66", "first");
     if (n > 1) drawPtr(n - 1, "#4499dd", "last");
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // linked_list (vertical) – 縦方向連結リスト（スタック表示用）
+  // ════════════════════════════════════════════════════════════════════
+  _drawLinkedListV(obj, areaY, areaH) {
+    const { nodes = [], label = "", highlights = {}, is_doubly = false } = obj;
+    const n   = nodes.length;
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    const PAD_T   = 10;
+    const PAD_B   = 10;
+    const PTR_W   = 48;   // 左側 "top" ポインタ用
+    const ARROW_H = Math.max(14, Math.min(22, areaH * 0.06));
+    const NULL_H  = ARROW_H;
+    const slots   = is_doubly ? Math.max(n - 1, 0) : n;  // 矢印の数
+    const NODE_H  = n === 0 ? 32
+                  : Math.max(20, Math.min(40,
+                      (areaH - PAD_T - PAD_B - slots * ARROW_H - NULL_H) / n));
+    const NODE_W  = Math.max(50, Math.min(90, (cw - PTR_W - 20) * 0.6));
+    const nodeX   = PTR_W + (cw - PTR_W - NODE_W) / 2;
+    const CORNER  = 5;
+
+    const totalH  = n * NODE_H + slots * ARROW_H + NULL_H;
+    const startY  = areaY + PAD_T + Math.max(0, (areaH - PAD_T - PAD_B - totalH) / 2);
+    const midX    = nodeX + NODE_W / 2;
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(label, 6, areaY + 12);
+    }
+
+    if (n === 0) {
+      ctx.fillStyle = "#445566"; ctx.font = "12px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("(空)", cw / 2, areaY + areaH / 2);
+      ctx.restore(); return;
+    }
+
+    const nodeYs = [];
+    for (let i = 0; i < n; i++) {
+      const slotsBefore = is_doubly ? i : i;
+      const ny = startY + i * NODE_H + slotsBefore * ARROW_H;
+      nodeYs.push(ny);
+
+      const hlColor = highlights[String(i)];
+      ctx.fillStyle = "#1c2a3a";
+      this._rrect(ctx, nodeX, ny, NODE_W, NODE_H, CORNER); ctx.fill();
+
+      ctx.strokeStyle = hlColor || "#4472C4";
+      ctx.lineWidth   = hlColor ? 2.5 : 1.5;
+      this._rrect(ctx, nodeX, ny, NODE_W, NODE_H, CORNER); ctx.stroke();
+
+      if (hlColor) {
+        ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = hlColor;
+        this._rrect(ctx, nodeX, ny, NODE_W, NODE_H, CORNER); ctx.fill(); ctx.restore();
+      }
+
+      const fs = Math.max(9, Math.min(14, NODE_H * 0.42));
+      ctx.fillStyle = hlColor || "#ddd";
+      ctx.font = `bold ${fs}px monospace`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(nodes[i]), midX, ny + NODE_H / 2);
+      ctx.textBaseline = "alphabetic";
+
+      // 矢印（下向き）
+      if (i < n - 1) {
+        const ay1 = ny + NODE_H, ay2 = ay1 + ARROW_H;
+        ctx.strokeStyle = "#5577aa"; ctx.lineWidth = 1.5;
+        if (is_doubly) {
+          this._arrow(ctx, midX - 5, ay1, midX - 5, ay2);
+          this._arrow(ctx, midX + 5, ay2, midX + 5, ay1);
+        } else {
+          this._arrow(ctx, midX, ay1, midX, ay2);
+        }
+      }
+    }
+
+    // 末尾 → null (片方向のみ)
+    if (!is_doubly) {
+      const lastNY = nodeYs[n - 1];
+      const ay1 = lastNY + NODE_H, ay2 = ay1 + NULL_H;
+      ctx.strokeStyle = "#3a5060"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(midX, ay1); ctx.lineTo(midX, ay2 - 8); ctx.stroke();
+      ctx.fillStyle = "#3a5060"; ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillText("null", midX, ay2 - 8); ctx.textBaseline = "alphabetic";
+    }
+
+    // "top" ポインタ（左側、先頭ノードを指す）
+    const topNY   = nodeYs[0];
+    const ptrMidY = topNY + NODE_H / 2;
+    const ptrX2   = nodeX - 4;
+    const ptrX1   = ptrX2 - 22;
+    ctx.fillStyle = "#44cc66"; ctx.strokeStyle = "#44cc66"; ctx.lineWidth = 1.5;
+    ctx.font = "bold 10px monospace"; ctx.textAlign = "right";
+    ctx.fillText("top", ptrX1 - 2, ptrMidY + 4);
+    ctx.beginPath(); ctx.moveTo(ptrX1, ptrMidY); ctx.lineTo(ptrX2, ptrMidY); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ptrX2, ptrMidY);
+    ctx.lineTo(ptrX2 - 7, ptrMidY - 4);
+    ctx.lineTo(ptrX2 - 7, ptrMidY + 4);
+    ctx.closePath(); ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // stack_v – 縦方向配列スタック（Bottom 固定・上に積む）
+  // ════════════════════════════════════════════════════════════════════
+  _drawStackV(obj, areaY, areaH) {
+    const { values = [], top = -1, label = "", highlights = {}, max_size } = obj;
+    const n   = (max_size !== undefined) ? max_size : values.length;
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    const PAD_IDX = 26;   // インデックス表示幅（左）
+    const PAD_PTR = 52;   // top ポインタ幅（右）
+    const PAD_T   = label ? 22 : 8;
+    const PAD_B   = 20;   // BOTTOM ラベル
+
+    const availH  = areaH - PAD_T - PAD_B;
+    const cellH   = Math.max(14, Math.min(38, availH / Math.max(n, 1)));
+    const cellW   = Math.max(44, Math.min(110, cw - PAD_IDX - PAD_PTR - 16));
+    const cellX   = PAD_IDX + (cw - PAD_IDX - PAD_PTR - cellW) / 2;
+    const bottomY = areaY + areaH - PAD_B;
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + 14);
+    }
+
+    // BOTTOM ライン＋ラベル
+    ctx.strokeStyle = "#44607a"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(cellX - 2, bottomY); ctx.lineTo(cellX + cellW + 2, bottomY); ctx.stroke();
+    ctx.fillStyle = "#44607a"; ctx.font = "bold 9px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("BOTTOM", cellX + cellW / 2, bottomY + 14);
+
+    for (let i = 0; i < n; i++) {
+      const cellY   = bottomY - (i + 1) * cellH;
+      const hasVal  = i <= top;
+      const hlColor = highlights[String(i)];
+
+      // 背景
+      ctx.fillStyle = hasVal ? "#1c2a3a" : "#0a0e18";
+      ctx.fillRect(cellX, cellY, cellW, cellH - 1);
+
+      // ハイライト
+      if (hlColor) {
+        ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = hlColor;
+        ctx.fillRect(cellX, cellY, cellW, cellH - 1); ctx.restore();
+      }
+
+      // 枠線
+      ctx.strokeStyle = hlColor || (hasVal ? "#4472C4" : "#1e2833");
+      ctx.lineWidth   = hlColor ? 2 : 0.8;
+      ctx.strokeRect(cellX + 0.5, cellY + 0.5, cellW - 1, cellH - 2);
+
+      // 値
+      if (hasVal) {
+        const fs = Math.max(9, Math.min(14, cellH * 0.50));
+        ctx.fillStyle = hlColor || "#ddd";
+        ctx.font = `bold ${fs}px monospace`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(values[i]), cellX + cellW / 2, cellY + cellH / 2);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      // インデックス（左）
+      ctx.fillStyle = "#3a5570"; ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(String(i), cellX - 4, cellY + cellH / 2 + 3);
+    }
+
+    // top ポインタ（右側、→ で指す）
+    if (top >= 0 && top < n) {
+      const topY  = bottomY - (top + 1) * cellH;
+      const midY  = topY + cellH / 2;
+      const ax1   = cellX + cellW + 4;
+      const ax2   = ax1 + 28;
+
+      ctx.strokeStyle = "#44cc66"; ctx.fillStyle = "#44cc66"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ax2, midY); ctx.lineTo(ax1 + 6, midY); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ax1 + 6, midY);
+      ctx.lineTo(ax1 + 12, midY - 4);
+      ctx.lineTo(ax1 + 12, midY + 4);
+      ctx.closePath(); ctx.fill();
+      ctx.font = "bold 10px monospace"; ctx.textAlign = "left";
+      ctx.fillText("top", ax1 + 14, midY + 4);
+    }
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // queue_circ – 円形循環キュー
+  // ════════════════════════════════════════════════════════════════════
+  _drawQueueCirc(obj, areaY, areaH) {
+    const { values = [], front = 0, back = 0, count = 0,
+            label = "", highlights = {} } = obj;
+    const n = values.length;
+    if (n === 0) return;
+
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    const cx      = cw / 2;
+    const cy      = areaY + areaH / 2 + (label ? 4 : 0);
+    const outerR  = Math.min(cw * 0.38, areaH * 0.40);
+    const nodeSize = Math.max(20, Math.min(34, outerR * 0.55));
+    const hw      = nodeSize / 2;
+    const CORNER  = 4;
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + 12);
+    }
+
+    // ガイド円（薄い円弧）
+    ctx.strokeStyle = "#1e2e3e"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, outerR, 0, 2 * Math.PI); ctx.stroke();
+
+    // アクティブなインデックス集合
+    const activeSet = new Set();
+    for (let j = 0; j < count; j++) activeSet.add((front + j) % n);
+
+    // 各スロット
+    for (let i = 0; i < n; i++) {
+      const angle = (2 * Math.PI * i / n) - Math.PI / 2;
+      const nx = cx + outerR * Math.cos(angle);
+      const ny = cy + outerR * Math.sin(angle);
+      const isAct   = activeSet.has(i);
+      const hlColor = highlights[String(i)];
+
+      // 背景
+      ctx.fillStyle = isAct ? "#1c2a3a" : "#0a0e18";
+      this._rrect(ctx, nx - hw, ny - hw, nodeSize, nodeSize, CORNER); ctx.fill();
+
+      if (hlColor) {
+        ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = hlColor;
+        this._rrect(ctx, nx - hw, ny - hw, nodeSize, nodeSize, CORNER); ctx.fill(); ctx.restore();
+      }
+
+      // 枠線
+      ctx.strokeStyle = hlColor || (isAct ? "#4472C4" : "#1e2833");
+      ctx.lineWidth   = hlColor ? 2.5 : 0.8;
+      this._rrect(ctx, nx - hw, ny - hw, nodeSize, nodeSize, CORNER); ctx.stroke();
+
+      // 値
+      if (isAct) {
+        const fs = Math.max(8, Math.min(13, nodeSize * 0.40));
+        ctx.fillStyle = hlColor || "#ddd";
+        ctx.font = `bold ${fs}px monospace`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(values[i]), nx, ny);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      // インデックスラベル（外側）
+      const lblR = outerR + hw + 11;
+      ctx.fillStyle = "#3a5570"; ctx.font = "9px monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(i), cx + lblR * Math.cos(angle), cy + lblR * Math.sin(angle));
+      ctx.textBaseline = "alphabetic";
+    }
+
+    // ポインタを描画するヘルパー
+    const drawCircPtr = (idx, color, lbl) => {
+      const angle = (2 * Math.PI * (idx % n) / n) - Math.PI / 2;
+      const r1 = outerR * 0.18, r2 = outerR - hw - 5;
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      this._arrow(ctx, cx + r1 * Math.cos(angle), cy + r1 * Math.sin(angle),
+                       cx + r2 * Math.cos(angle), cy + r2 * Math.sin(angle));
+      const lr = outerR * 0.52;
+      ctx.fillStyle = color; ctx.font = "bold 9px monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(lbl, cx + lr * Math.cos(angle), cy + lr * Math.sin(angle));
+      ctx.textBaseline = "alphabetic";
+    };
+
+    drawCircPtr(front,   "#44cc66", "front");
+    // front と back が同じ位置のときはラベルを少しずらして重ならないようにする
+    if ((back % n) !== front || count === 0) {
+      drawCircPtr(back, "#ff8844", "back");
+    } else {
+      // 満杯: front==back → back ラベルだけ内側に小さく表示
+      const angle = (2 * Math.PI * (back % n) / n) - Math.PI / 2;
+      const lr = outerR * 0.30;
+      ctx.fillStyle = "#ff8844"; ctx.font = "bold 9px monospace";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("back", cx + lr * Math.cos(angle), cy + lr * Math.sin(angle));
+      ctx.textBaseline = "alphabetic";
+    }
 
     ctx.restore();
   }
