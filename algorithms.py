@@ -501,7 +501,8 @@ def queue_circular(n, **kwargs):
         hl = hl_extra or {}
         return _f([_queue_circ("queue", list(data), front, back, count,
                                f"CircularQueue  max={MAXSIZE}  count={count}", hl=hl)],
-                  base + [{"message": msg, "color": color}], finished=finished)
+                  base + [{"message": msg, "color": color}],
+                  finished=finished, text_position="bottom")
 
     yield frame(msg="循環キュー生成 (空)")
 

@@ -1468,6 +1468,8 @@ class ArrayCanvas {
   // ════════════════════════════════════════════════════════════════════
   // queue_circ – 円形循環キュー
   // ════════════════════════════════════════════════════════════════════
+  // queue_circ – ドーナツリング型循環キュー
+  // ════════════════════════════════════════════════════════════════════
   _drawQueueCirc(obj, areaY, areaH) {
     const { values = [], front = 0, back = 0, count = 0,
             label = "", highlights = {} } = obj;
@@ -1477,94 +1479,159 @@ class ArrayCanvas {
     const ctx = this.ctx;
     const cw  = this.cw;
 
-    const cx      = cw / 2;
-    const cy      = areaY + areaH / 2 + (label ? 4 : 0);
-    const outerR  = Math.min(cw * 0.38, areaH * 0.40);
-    const nodeSize = Math.max(20, Math.min(34, outerR * 0.55));
-    const hw      = nodeSize / 2;
-    const CORNER  = 4;
+    // ── レイアウト計算 ──────────────────────────────────────────────
+    const topPad   = label ? 18 : 6;
+    const botPad   = 52;   // 底部テキストオーバーレイ分を除外
+    // ポインタバッジまで含めた総占有半径 = outerR + IDX_PAD + PTR_LEN + BADGE_R
+    const IDX_PAD  = 14;   // outerR 外縁～インデックスラベル中心
+    const PTR_LEN  = 22;   // インデックスラベル外縁～矢印先端
+    const BADGE_R  = 10;   // バッジ半高さ程度
+    const totalExt = IDX_PAD + PTR_LEN + BADGE_R;
+    const innerH   = areaH - topPad - botPad;  // 利用可能な縦スペース
+    const outerR   = Math.max(28, Math.min(
+      cw / 2 - totalExt - 4,
+      innerH / 2 - totalExt - 4
+    ));
+    const innerR   = outerR * 0.46;
+    const midR     = (outerR + innerR) / 2;
+    const idxR     = outerR + IDX_PAD;
+
+    const cx = cw / 2;
+    // 中心をテキスト領域を除いたエリアの中央に配置
+    const cy = areaY + topPad + innerH / 2;
+
+    const sliceA   = (2 * Math.PI) / n;
+    const startAng = -Math.PI / 2;   // 12時から開始
 
     ctx.save();
 
+    // ラベル
     if (label) {
       ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
       ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + 12);
     }
 
-    // ガイド円（薄い円弧）
-    ctx.strokeStyle = "#1e2e3e"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, outerR, 0, 2 * Math.PI); ctx.stroke();
-
-    // アクティブなインデックス集合
+    // アクティブインデックス集合
     const activeSet = new Set();
     for (let j = 0; j < count; j++) activeSet.add((front + j) % n);
 
-    // 各スロット
+    // ── パイセグメント描画 ──────────────────────────────────────────
     for (let i = 0; i < n; i++) {
-      const angle = (2 * Math.PI * i / n) - Math.PI / 2;
-      const nx = cx + outerR * Math.cos(angle);
-      const ny = cy + outerR * Math.sin(angle);
+      const a1   = startAng + i * sliceA;
+      const a2   = startAng + (i + 1) * sliceA;
+      const midA = (a1 + a2) / 2;
       const isAct   = activeSet.has(i);
       const hlColor = highlights[String(i)];
 
-      // 背景
-      ctx.fillStyle = isAct ? "#1c2a3a" : "#0a0e18";
-      this._rrect(ctx, nx - hw, ny - hw, nodeSize, nodeSize, CORNER); ctx.fill();
+      // セグメントパス（ドーナツの一切れ）
+      const seg = () => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, outerR, a1, a2);
+        ctx.arc(cx, cy, innerR, a2, a1, true);
+        ctx.closePath();
+      };
 
+      // 背景
+      seg();
+      ctx.fillStyle = isAct ? "#1a2a3a" : "#080c14";
+      ctx.fill();
+
+      // ハイライト
       if (hlColor) {
-        ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = hlColor;
-        this._rrect(ctx, nx - hw, ny - hw, nodeSize, nodeSize, CORNER); ctx.fill(); ctx.restore();
+        seg();
+        ctx.save(); ctx.globalAlpha = 0.30; ctx.fillStyle = hlColor;
+        ctx.fill(); ctx.restore();
       }
 
       // 枠線
-      ctx.strokeStyle = hlColor || (isAct ? "#4472C4" : "#1e2833");
-      ctx.lineWidth   = hlColor ? 2.5 : 0.8;
-      this._rrect(ctx, nx - hw, ny - hw, nodeSize, nodeSize, CORNER); ctx.stroke();
+      seg();
+      ctx.strokeStyle = hlColor || (isAct ? "#4472C4" : "#1a2030");
+      ctx.lineWidth   = hlColor ? 2 : 0.8;
+      ctx.stroke();
 
-      // 値
-      if (isAct) {
-        const fs = Math.max(8, Math.min(13, nodeSize * 0.40));
+      // 値テキスト（アクティブ or ハイライトのみ）
+      if (isAct || hlColor) {
+        const tx = cx + midR * Math.cos(midA);
+        const ty = cy + midR * Math.sin(midA);
+        const arcLen = midR * sliceA;
+        const fs = Math.max(8, Math.min(13, arcLen * 0.40));
         ctx.fillStyle = hlColor || "#ddd";
         ctx.font = `bold ${fs}px monospace`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText(String(values[i]), nx, ny);
+        ctx.fillText(String(values[i]), tx, ty);
         ctx.textBaseline = "alphabetic";
       }
 
-      // インデックスラベル（外側）
-      const lblR = outerR + hw + 11;
-      ctx.fillStyle = "#3a5570"; ctx.font = "9px monospace";
+      // インデックスラベル（外側・緑）
+      ctx.fillStyle = "#44aa44"; ctx.font = "bold 9px monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(String(i), cx + lblR * Math.cos(angle), cy + lblR * Math.sin(angle));
+      ctx.fillText(String(i),
+        cx + idxR * Math.cos(midA),
+        cy + idxR * Math.sin(midA));
       ctx.textBaseline = "alphabetic";
     }
 
-    // ポインタを描画するヘルパー
-    const drawCircPtr = (idx, color, lbl) => {
-      const angle = (2 * Math.PI * (idx % n) / n) - Math.PI / 2;
-      const r1 = outerR * 0.18, r2 = outerR - hw - 5;
-      ctx.strokeStyle = color; ctx.lineWidth = 2;
-      this._arrow(ctx, cx + r1 * Math.cos(angle), cy + r1 * Math.sin(angle),
-                       cx + r2 * Math.cos(angle), cy + r2 * Math.sin(angle));
-      const lr = outerR * 0.52;
-      ctx.fillStyle = color; ctx.font = "bold 9px monospace";
+    // 外縁・内縁の境界円（強調）
+    ctx.strokeStyle = "#2a3a50"; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, outerR, 0, 2 * Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, 2 * Math.PI); ctx.stroke();
+
+    // 空キュー表示
+    if (count === 0) {
+      ctx.fillStyle = "#445566"; ctx.font = "11px monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(lbl, cx + lr * Math.cos(angle), cy + lr * Math.sin(angle));
+      ctx.fillText("(空)", cx, cy);
+      ctx.textBaseline = "alphabetic";
+    }
+
+    // ── 外側ポインタ矢印 + バッジ ────────────────────────────────
+    // front と back が重なる場合は back を隣スライスの中央にずらす
+    const BADGE_H  = 13;
+    const BADGE_PD = 8;
+    const arrowGap = IDX_PAD + 4;   // outerR からの矢印先端距離
+    const arrowLen = PTR_LEN;        // 矢印の長さ
+
+    const drawExtPtr = (idxF, color, lbl, angleOffset = 0) => {
+      const midA = startAng + (idxF + 0.5) * sliceA + angleOffset;
+      const tipR  = outerR + arrowGap;          // 矢印先端（リング外縁すぐ外）
+      const tailR = tipR + arrowLen;             // 矢印尾端
+
+      const tx1 = cx + tailR * Math.cos(midA);
+      const ty1 = cy + tailR * Math.sin(midA);
+      const tx2 = cx + tipR  * Math.cos(midA);
+      const ty2 = cy + tipR  * Math.sin(midA);
+
+      // 矢印
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      this._arrow(ctx, tx1, ty1, tx2, ty2);
+
+      // バッジ（矢印尾端のさらに外側）
+      const badgeCR = tailR + BADGE_H / 2 + 2;
+      const bcx = cx + badgeCR * Math.cos(midA);
+      const bcy = cy + badgeCR * Math.sin(midA);
+      ctx.font = "bold 10px monospace";
+      const tw = ctx.measureText(lbl).width;
+      const bw = tw + BADGE_PD;
+
+      ctx.save(); ctx.globalAlpha = 0.92; ctx.fillStyle = color;
+      this._rrect(ctx, bcx - bw/2, bcy - BADGE_H/2, bw, BADGE_H, 3);
+      ctx.fill(); ctx.restore();
+
+      ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(lbl, bcx, bcy);
       ctx.textBaseline = "alphabetic";
     };
 
-    drawCircPtr(front,   "#44cc66", "front");
-    // front と back が同じ位置のときはラベルを少しずらして重ならないようにする
-    if ((back % n) !== front || count === 0) {
-      drawCircPtr(back, "#ff8844", "back");
+    // front ポインタ（緑）
+    drawExtPtr(front % n, "#44cc66", "front");
+
+    // back ポインタ（オレンジ）: front と重なる場合は半スライスずらす
+    const backIdx = back % n;
+    const frontIdx = front % n;
+    if (backIdx === frontIdx && count > 0) {
+      drawExtPtr(backIdx, "#ff8844", "back", sliceA * 0.45);
     } else {
-      // 満杯: front==back → back ラベルだけ内側に小さく表示
-      const angle = (2 * Math.PI * (back % n) / n) - Math.PI / 2;
-      const lr = outerR * 0.30;
-      ctx.fillStyle = "#ff8844"; ctx.font = "bold 9px monospace";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("back", cx + lr * Math.cos(angle), cy + lr * Math.sin(angle));
-      ctx.textBaseline = "alphabetic";
+      drawExtPtr(backIdx, "#ff8844", "back");
     }
 
     ctx.restore();
