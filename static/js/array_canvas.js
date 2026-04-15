@@ -1172,8 +1172,9 @@ class ArrayCanvas {
     const badgeBot = nodeY - GAP;
     const badgeTop = badgeBot - BADGE_H;
 
-    const drawPtr = (nodeIdx, color, lbl) => {
-      const px = nodeXs[nodeIdx] + NODE_W / 2;
+    // offsetX: 同一ノードに2ポインタが重なるとき左右にずらすピクセル
+    const drawPtr = (nodeIdx, color, lbl, offsetX = 0) => {
+      const px = nodeXs[nodeIdx] + NODE_W / 2 + offsetX;
       ctx.font = "bold 10px monospace";
       const tw = ctx.measureText(lbl).width;
       const bw = tw + 8, br = 3;
@@ -1197,8 +1198,11 @@ class ArrayCanvas {
       ctx.closePath(); ctx.fill();
     };
 
-    drawPtr(0, ptr_colors[0], ptr_labels[0]);
-    if (n > 1) drawPtr(n - 1, ptr_colors[1], ptr_labels[1]);
+    // front と back が同一ノードを指す場合（n=1）は左右にずらして両方表示
+    const sameNode = (n === 1);
+    const shift = sameNode ? Math.min(NODE_W * 0.22, 12) : 0;
+    drawPtr(0,     ptr_colors[0], ptr_labels[0], sameNode ? -shift : 0);
+    drawPtr(n - 1, ptr_colors[1], ptr_labels[1], sameNode ? +shift : 0);
 
     ctx.restore();
   }
