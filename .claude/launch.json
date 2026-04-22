@@ -3,8 +3,14 @@
   "configurations": [
     {
       "name": "AAforDataStructures",
-      "runtimeExecutable": "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",
-      "runtimeArgs": ["-m", "uvicorn", "main:app", "--port", "8006"],
+      "runtimeExecutable": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "main:app",
+        "--port",
+        "8006"
+      ],
       "port": 8006
     }
   ]

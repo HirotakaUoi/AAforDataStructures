@@ -645,6 +645,1027 @@ def rpn_eval(n, **kwargs):
 
 
 # ===========================================================================
+# Ch.6: 二分探索木 (type: "misc")
+# ===========================================================================
+
+# ─── BST helpers ─────────────────────────────────────────────────────────
+
+def _bst_apply_hl(node, hl_map):
+    if node is None:
+        return None
+    return {
+        "key":       node["key"],
+        "color":     node.get("color", "#4472C4"),
+        "highlight": hl_map.get(node["key"]),
+        "left":      _bst_apply_hl(node["left"],  hl_map),
+        "right":     _bst_apply_hl(node["right"], hl_map),
+    }
+
+def _bst_obj(id, node, hl_map=None, label="", weight=1):
+    return {"id": id, "type": "bst_tree",
+            "root": _bst_apply_hl(node, hl_map or {}),
+            "label": label, "weight": weight}
+
+def _bst_insert(tree, key):
+    if tree is None:
+        return {"key": key, "color": "#4472C4", "left": None, "right": None}
+    t = dict(tree)
+    if key < t["key"]:
+        t["left"]  = _bst_insert(t["left"],  key)
+    else:
+        t["right"] = _bst_insert(t["right"], key)
+    return t
+
+def _bst_search_path(tree, key):
+    path = []
+    node = tree
+    while node is not None:
+        path.append(node["key"])
+        if key == node["key"]:
+            break
+        node = node["left"] if key < node["key"] else node["right"]
+    return path
+
+def _bst_min_node(node):
+    while node["left"] is not None:
+        node = node["left"]
+    return node
+
+def _bst_delete(tree, key):
+    if tree is None:
+        return None
+    t = dict(tree)
+    if key < t["key"]:
+        t["left"]  = _bst_delete(t["left"],  key)
+    elif key > t["key"]:
+        t["right"] = _bst_delete(t["right"], key)
+    else:
+        if t["left"] is None:
+            return t["right"]
+        if t["right"] is None:
+            return t["left"]
+        succ = _bst_min_node(t["right"])
+        t["key"]   = succ["key"]
+        t["right"] = _bst_delete(t["right"], succ["key"])
+    return t
+
+
+def bst_operations(n, **kwargs):
+    """Ch.6: 二分探索木 (BST) の挿入・探索・削除"""
+    from random import sample
+    N = max(5, min(int(n), 24))
+    vals = sample(range(1, 200), N)
+
+    base = [{"message": f"二分探索木 (BST)  N={N}  (Ch.6)", "color": "white"}]
+
+    tree = None
+
+    # ── 挿入フェーズ ─────────────────────────────────────────────────
+    for v in vals:
+        # 挿入パスを可視化
+        path = _bst_search_path(tree, v) if tree else []
+        if path:
+            yield _f([_bst_obj("bst", tree, hl_map={k: "yellow" for k in path},
+                               label="BST")],
+                     base + [{"message": f"insert({v}): 挿入位置を探索中  path={path}", "color": "cyan"}])
+        tree = _bst_insert(tree, v)
+        yield _f([_bst_obj("bst", tree, hl_map={v: "#44ff88"}, label="BST")],
+                 base + [{"message": f"insert({v}) 完了", "color": "lightgreen"}])
+
+    yield _f([_bst_obj("bst", tree, label="BST")],
+             base + [{"message": f"挿入完了  N={N}  ノード数={N}", "color": "white"}])
+
+    # ── 探索フェーズ ─────────────────────────────────────────────────
+    not_in = next(x for x in range(1, 200) if x not in set(vals))
+    search_targets = [vals[N // 3], vals[2 * N // 3], not_in]
+    for target in search_targets:
+        path = _bst_search_path(tree, target)
+        found = (path and path[-1] == target)
+        for step, k in enumerate(path):
+            hl = {k: ("#44ff88" if k == target else "yellow")}
+            yield _f([_bst_obj("bst", tree, hl_map=hl, label="BST")],
+                     base + [{"message": f"search({target}): [{step+1}] key={k}  {'→ 発見!' if k==target else '→ 次へ'}",
+                              "color": "lightgreen" if k == target else "cyan"}])
+        if not found:
+            yield _f([_bst_obj("bst", tree, label="BST")],
+                     base + [{"message": f"search({target}): Not Found", "color": "#ff6655"}])
+
+    # ── 削除フェーズ ─────────────────────────────────────────────────
+    delete_targets = [vals[1], vals[N // 2]]
+    for target in delete_targets:
+        path = _bst_search_path(tree, target)
+        if path and path[-1] == target:
+            yield _f([_bst_obj("bst", tree, hl_map={target: "#ff4444"}, label="BST")],
+                     base + [{"message": f"delete({target}): ノードを削除します", "color": "orange"}])
+            tree = _bst_delete(tree, target)
+            yield _f([_bst_obj("bst", tree, label="BST")],
+                     base + [{"message": f"delete({target}) 完了", "color": "lightgreen"}])
+
+    yield _f([_bst_obj("bst", tree, label="BST")],
+             base + [{"message": "BST 操作完了", "color": "#44aa44"}],
+             finished=True)
+
+
+# ─── 赤黒木 helpers ───────────────────────────────────────────────────────
+
+class _RBNode:
+    __slots__ = ('key', 'color', 'left', 'right', 'parent')
+    def __init__(self, key, color='red'):
+        self.key    = key
+        self.color  = color  # 'red' or 'black'
+        self.left   = self.right = self.parent = None
+
+
+def _rb_left_rotate(root, x, nil):
+    y        = x.right
+    x.right  = y.left
+    if y.left is not nil:
+        y.left.parent = x
+    y.parent = x.parent
+    if x.parent is nil:
+        root = y
+    elif x is x.parent.left:
+        x.parent.left  = y
+    else:
+        x.parent.right = y
+    y.left   = x
+    x.parent = y
+    return root
+
+
+def _rb_right_rotate(root, x, nil):
+    y        = x.left
+    x.left   = y.right
+    if y.right is not nil:
+        y.right.parent = x
+    y.parent = x.parent
+    if x.parent is nil:
+        root = y
+    elif x is x.parent.right:
+        x.parent.right = y
+    else:
+        x.parent.left  = y
+    y.right  = x
+    x.parent = y
+    return root
+
+
+def _rb_to_dict(node, nil, hl_map=None):
+    if node is nil or node is None:
+        return None
+    color = "#cc3333" if node.color == 'red' else "#4472C4"
+    return {
+        "key":       node.key,
+        "color":     color,
+        "highlight": (hl_map or {}).get(node.key),
+        "left":      _rb_to_dict(node.left,  nil, hl_map),
+        "right":     _rb_to_dict(node.right, nil, hl_map),
+    }
+
+def _rb_obj(id, root, nil, hl_map=None, label="", weight=1):
+    return {"id": id, "type": "bst_tree",
+            "root": _rb_to_dict(root, nil, hl_map or {}),
+            "label": label, "weight": weight}
+
+
+def rb_tree_insert(n, **kwargs):
+    """赤黒木: 挿入とバランス調整を可視化"""
+    from random import sample
+    N = max(4, min(int(n), 24))
+    vals = sample(range(1, 200), N)
+
+    base = [{"message": f"赤黒木 (Red-Black Tree)  N={N}", "color": "white"}]
+
+    nil        = _RBNode(-1, 'black')
+    nil.left   = nil.right = nil.parent = nil
+    root       = nil
+    root.parent = nil
+
+    def snapshot(hl_map=None, msg="", color="lightgreen", finished=False):
+        r = root if root is not nil else None
+        return _f([_rb_obj("rb", r, nil, hl_map, label="Red-Black Tree")],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield snapshot(msg="赤黒木 初期化 (空)")
+
+    for v in vals:
+        # Insert as BST
+        z         = _RBNode(v, 'red')
+        z.left    = z.right = nil
+        y         = nil
+        x         = root
+        while x is not nil:
+            y = x
+            x = x.left if z.key < x.key else x.right
+        z.parent = y
+        if y is nil:
+            root = z
+        elif z.key < y.key:
+            y.left = z
+        else:
+            y.right = z
+
+        yield snapshot({v: "yellow"}, msg=f"insert({v}): BST挿入 (赤ノード)", color="cyan")
+
+        # Fix RB properties
+        while z.parent.color == 'red':
+            if z.parent is z.parent.parent.left:
+                uncle = z.parent.parent.right
+                if uncle.color == 'red':
+                    # Case 1: recolor
+                    z.parent.color        = 'black'
+                    uncle.color           = 'black'
+                    z.parent.parent.color = 'red'
+                    old_z = z
+                    z = z.parent.parent
+                    yield snapshot(
+                        {z.key: "orange", old_z.key: "#44aaff"},
+                        msg=f"Case1: 叔父が赤 → 再彩色  祖父{z.key}を赤に",
+                        color="orange")
+                else:
+                    if z is z.parent.right:
+                        # Case 2: left rotate
+                        z = z.parent
+                        root = _rb_left_rotate(root, z, nil)
+                        yield snapshot({z.key: "orange"}, msg=f"Case2: 左回転  pivot={z.key}", color="orange")
+                    # Case 3: right rotate
+                    z.parent.color        = 'black'
+                    z.parent.parent.color = 'red'
+                    pp = z.parent.parent
+                    root = _rb_right_rotate(root, pp, nil)
+                    yield snapshot({z.key: "#44ff88"}, msg=f"Case3: 右回転 + 再彩色  pivot={pp.key}", color="cyan")
+            else:
+                uncle = z.parent.parent.left
+                if uncle.color == 'red':
+                    z.parent.color        = 'black'
+                    uncle.color           = 'black'
+                    z.parent.parent.color = 'red'
+                    old_z = z
+                    z = z.parent.parent
+                    yield snapshot(
+                        {z.key: "orange", old_z.key: "#44aaff"},
+                        msg=f"Case1: 叔父が赤 → 再彩色  祖父{z.key}を赤に",
+                        color="orange")
+                else:
+                    if z is z.parent.left:
+                        z = z.parent
+                        root = _rb_right_rotate(root, z, nil)
+                        yield snapshot({z.key: "orange"}, msg=f"Case2: 右回転  pivot={z.key}", color="orange")
+                    z.parent.color        = 'black'
+                    z.parent.parent.color = 'red'
+                    pp = z.parent.parent
+                    root = _rb_left_rotate(root, pp, nil)
+                    yield snapshot({z.key: "#44ff88"}, msg=f"Case3: 左回転 + 再彩色  pivot={pp.key}", color="cyan")
+
+        root.color = 'black'
+        yield snapshot({v: "#44ff88"}, msg=f"insert({v}) 完了  根は黒", color="lightgreen")
+
+    yield snapshot(msg="赤黒木 構築完了  (赤=赤ノード / 青=黒ノード)", color="#44aa44", finished=True)
+
+
+# ===========================================================================
+# Ch.11: グラフ – DFS / BFS (type: "misc")
+# ===========================================================================
+
+def _make_random_graph(n, seed=None):
+    """N ノードのランダム連結無向グラフを生成 (円形レイアウト)"""
+    import math
+    from random import Random
+    rng = Random(seed)
+
+    # 円形レイアウト (12時スタート)
+    nodes = []
+    for i in range(n):
+        angle = 2 * math.pi * i / n - math.pi / 2
+        x = round(0.5 + 0.44 * math.cos(angle), 3)
+        y = round(0.5 + 0.44 * math.sin(angle), 3)
+        nodes.append({"id": i, "label": str(i), "x": x, "y": y})
+
+    # スパニングツリーで連結性を保証
+    perm = list(range(1, n))
+    rng.shuffle(perm)
+    in_tree = [0]
+    edges   = set()
+    adj     = {i: [] for i in range(n)}
+
+    for v in perm:
+        u = rng.choice(in_tree)
+        e = tuple(sorted([u, v]))
+        edges.add(e)
+        adj[u].append(v)
+        adj[v].append(u)
+        in_tree.append(v)
+
+    # 追加辺 (n//3 本)
+    for _ in range(n // 3):
+        for _ in range(30):
+            u = rng.randint(0, n - 1)
+            v = rng.randint(0, n - 1)
+            e = tuple(sorted([u, v]))
+            if u != v and e not in edges:
+                edges.add(e)
+                adj[u].append(v)
+                adj[v].append(u)
+                break
+
+    return nodes, sorted(edges), adj
+
+
+def _graph_frame(node_states, visited_edges, gn_list, ge_list,
+                 base, msg, color="lightgreen", finished=False):
+    COLOR_MAP = {
+        "default": "#4472C4",
+        "active":  "#ffcc44",
+        "visited": "#44aa44",
+        "queued":  "#ff8844",
+        "start":   "#cc44ff",
+    }
+    nodes = []
+    for nd in gn_list:
+        state = node_states.get(nd["id"], "default")
+        col   = COLOR_MAP.get(state, "#4472C4")
+        hl    = col if state != "default" else None
+        nodes.append({**nd, "color": col, "highlight": hl})
+
+    edges = []
+    for u, v in ge_list:
+        key = frozenset([u, v])
+        edges.append({"from": u, "to": v, "directed": False,
+                      "highlight": key in visited_edges})
+
+    return _f([{"id": "graph", "type": "graph_view",
+                "nodes": nodes, "edges": edges, "label": "Graph", "weight": 1}],
+              base + [{"message": msg, "color": color}], finished=finished)
+
+
+def graph_dfs(n, **kwargs):
+    """Ch.11: 深さ優先探索 (DFS)"""
+    N = max(4, min(int(n), 24))
+    gn_list, ge_list, adj = _make_random_graph(N)
+
+    base    = [{"message": f"深さ優先探索 (DFS)  N={N}  (Ch.11)", "color": "white"}]
+    start   = 0
+    states  = {i: "default" for i in range(N)}
+    v_edges = set()
+
+    def frame(msg, color="lightgreen", finished=False):
+        return _graph_frame(states, v_edges, gn_list, ge_list, base, msg, color, finished)
+
+    visited = set()
+    stack   = []
+    order   = []
+
+    states[start] = "start"
+    stack.append(start)
+    yield frame(f"DFS 開始  N={N}  start={start}  スタックに {start} をプッシュ", "cyan")
+
+    while stack:
+        u = stack.pop()
+        if u in visited:
+            continue
+        visited.add(u)
+        order.append(u)
+        states[u] = "active"
+        yield frame(f"Pop {u}  訪問順: {order}", "yellow")
+
+        states[u] = "visited"
+        pushed = []
+        for w in sorted(adj[u], reverse=True):
+            if w not in visited:
+                stack.append(w)
+                states[w] = "queued"
+                v_edges.add(frozenset([u, w]))
+                pushed.append(w)
+        yield frame(f"ノード {u} 訪問済み  隣接: {sorted(pushed)} をスタックへ", "lightgreen")
+
+    yield frame(f"DFS 完了  訪問順: {order}", "#44aa44", finished=True)
+
+
+def graph_bfs(n, **kwargs):
+    """Ch.11: 幅優先探索 (BFS)"""
+    from collections import deque
+    N = max(4, min(int(n), 24))
+    gn_list, ge_list, adj = _make_random_graph(N)
+
+    base    = [{"message": f"幅優先探索 (BFS)  N={N}  (Ch.11)", "color": "white"}]
+    start   = 0
+    states  = {i: "default" for i in range(N)}
+    v_edges = set()
+
+    def frame(msg, color="lightgreen", finished=False):
+        return _graph_frame(states, v_edges, gn_list, ge_list, base, msg, color, finished)
+
+    visited = set()
+    queue   = deque()
+    order   = []
+
+    visited.add(start)
+    queue.append(start)
+    states[start] = "start"
+    yield frame(f"BFS 開始  N={N}  start={start}  キューに {start} を追加", "cyan")
+
+    while queue:
+        u = queue.popleft()
+        order.append(u)
+        states[u] = "active"
+        yield frame(f"Dequeue {u}  訪問順: {order}", "yellow")
+
+        states[u] = "visited"
+        enqueued = []
+        for w in sorted(adj[u]):
+            if w not in visited:
+                visited.add(w)
+                queue.append(w)
+                states[w] = "queued"
+                v_edges.add(frozenset([u, w]))
+                enqueued.append(w)
+        yield frame(f"ノード {u} 訪問済み  隣接: {enqueued} をキューへ", "lightgreen")
+
+    yield frame(f"BFS 完了  訪問順: {order}", "#44aa44", finished=True)
+
+
+# ===========================================================================
+# Ch.10: ハッシュ表 (type: "misc")
+# ===========================================================================
+
+def _hash_slot(key=None, hl=None, chain=None):
+    return {"key": key, "highlight": hl, "chain": chain or []}
+
+def _hash_obj(id, slots, m, label="", active=-1, weight=1):
+    return {"id": id, "type": "hash_table",
+            "slots": slots, "m": m, "label": label,
+            "active": active, "weight": weight}
+
+def _hash_frame(slots, m, active, base, msg, color="lightgreen", finished=False):
+    return _f([_hash_obj("ht", slots, m, label=f"Hash Table  m={m}", active=active)],
+              base + [{"message": msg, "color": color}], finished=finished)
+
+
+def hash_open_addressing(n, **kwargs):
+    """Ch.10: 開番地法 (線形探索) によるハッシュ表"""
+    from random import sample
+
+    def _next_prime(x):
+        def _is_prime(v):
+            if v < 2: return False
+            for i in range(2, int(v**0.5) + 1):
+                if v % i == 0: return False
+            return True
+        while not _is_prime(x):
+            x += 1
+        return x
+
+    N = max(5, min(int(n), 24))
+    M = _next_prime(max(11, int(N * 1.6)))   # 空きスロットを確保する素数
+    INSERT_VALS = sample(range(1, 200), N)
+
+    base = [{"message": f"ハッシュ表 (開番地法/線形探索)  m={M}  (Ch.10)", "color": "white"}]
+
+    table  = [None] * M   # None = 空
+    slots  = [_hash_slot() for _ in range(M)]
+
+    def h(k): return k % M
+
+    yield _hash_frame(slots, M, -1, base, f"ハッシュ表初期化  m={M}  h(k) = k mod {M}")
+
+    for v in INSERT_VALS:
+        idx   = h(v)
+        probe = idx
+        steps = 0
+        # 線形探索でスロットを探す
+        while table[probe] is not None and steps < M:
+            slots_tmp = [_hash_slot(table[i]) for i in range(M)]
+            slots_tmp[probe] = _hash_slot(table[probe], hl="#ff8844")
+            yield _hash_frame(slots_tmp, M, probe, base,
+                              f"insert({v}): h({v})={idx}  [{probe}] 衝突!  次のスロットへ",
+                              color="orange")
+            probe = (probe + 1) % M
+            steps += 1
+
+        table[probe] = v
+        slots = [_hash_slot(table[i]) for i in range(M)]
+        slots[probe] = _hash_slot(v, hl="#44ff88")
+        yield _hash_frame(slots, M, probe, base,
+                          f"insert({v}): [{probe}] に格納  h({v})={idx}"
+                          + (f"  (探索{steps}回)" if steps > 0 else ""),
+                          color="lightgreen")
+        slots = [_hash_slot(table[i]) for i in range(M)]
+
+    # 探索フェーズ
+    not_in_oa = next(x for x in range(1, 200) if x not in set(INSERT_VALS))
+    search_targets = [INSERT_VALS[1], INSERT_VALS[N//2], not_in_oa]
+    for target in search_targets:
+        idx   = h(target)
+        probe = idx
+        steps = 0
+        found = False
+        while steps < M:
+            slots_tmp = [_hash_slot(table[i]) for i in range(M)]
+            slots_tmp[probe] = _hash_slot(table[probe], hl="yellow")
+            yield _hash_frame(slots_tmp, M, probe, base,
+                              f"search({target}): [{probe}]={table[probe]}  {'→ 発見!' if table[probe]==target else '→ 次へ'}",
+                              color="lightgreen" if table[probe] == target else "cyan")
+            if table[probe] == target:
+                found = True
+                break
+            if table[probe] is None:
+                break
+            probe = (probe + 1) % M
+            steps += 1
+        slots_tmp = [_hash_slot(table[i]) for i in range(M)]
+        if found:
+            slots_tmp[probe] = _hash_slot(table[probe], hl="#44ff88")
+        yield _hash_frame(slots_tmp, M, -1, base,
+                          f"search({target}): {'Found' if found else 'Not Found'}",
+                          color="#44ff88" if found else "#ff6655")
+        slots = [_hash_slot(table[i]) for i in range(M)]
+
+    yield _hash_frame(slots, M, -1, base,
+                      "ハッシュ表 (開番地法) 完了", "#44aa44", finished=True)
+
+
+def hash_chaining(n, **kwargs):
+    """Ch.10: チェイン法によるハッシュ表"""
+    from random import sample
+
+    def _next_prime(x):
+        def _is_prime(v):
+            if v < 2: return False
+            for i in range(2, int(v**0.5) + 1):
+                if v % i == 0: return False
+            return True
+        while not _is_prime(x):
+            x += 1
+        return x
+
+    N = max(5, min(int(n), 24))
+    M = _next_prime(max(5, N // 2))          # チェイン法: バケツ数 ≈ N/2
+    INSERT_VALS = sample(range(1, 200), N)
+
+    base = [{"message": f"ハッシュ表 (チェイン法)  m={M}  (Ch.10)", "color": "white"}]
+
+    chains = [[] for _ in range(M)]
+
+    def h(k): return k % M
+
+    def make_slots(hl_idx=-1, hl_chain_idx=-1):
+        s = []
+        for i in range(M):
+            hl = "yellow" if i == hl_idx else None
+            s.append({"key": f"[{i}]" if chains[i] else None,
+                       "highlight": hl,
+                       "chain": list(chains[i]),
+                       "chainHL": {hl_chain_idx: "#44ff88"} if hl_chain_idx >= 0 and i == hl_idx else {}})
+        return s
+
+    yield _hash_frame(make_slots(), M, -1, base,
+                      f"ハッシュ表初期化  m={M}  h(k) = k mod {M}")
+
+    for v in INSERT_VALS:
+        idx = h(v)
+        chains[idx].append(v)
+        slots = make_slots(hl_idx=idx, hl_chain_idx=len(chains[idx])-1)
+        yield _hash_frame(slots, M, idx, base,
+                          f"insert({v}): h({v})={idx}  チェイン[{idx}]に追加  → {list(chains[idx])}",
+                          color="lightgreen")
+
+    # 探索
+    not_in_ch = next(x for x in range(1, 200) if x not in set(INSERT_VALS))
+    search_targets = [INSERT_VALS[0], INSERT_VALS[N//2], not_in_ch]
+    for target in search_targets:
+        idx = h(target)
+        slots = make_slots(hl_idx=idx)
+        yield _hash_frame(slots, M, idx, base,
+                          f"search({target}): h({target})={idx}  チェイン[{idx}]を線形探索",
+                          color="cyan")
+        found = False
+        for j, v in enumerate(chains[idx]):
+            s2 = make_slots(hl_idx=idx, hl_chain_idx=j)
+            yield _hash_frame(s2, M, idx, base,
+                              f"search({target}): chain[{idx}][{j}]={v}  {'→ 発見!' if v==target else '→ 次へ'}",
+                              color="lightgreen" if v == target else "cyan")
+            if v == target:
+                found = True
+                break
+        if not found:
+            yield _hash_frame(make_slots(), M, -1, base,
+                              f"search({target}): Not Found", color="#ff6655")
+
+    yield _hash_frame(make_slots(), M, -1, base,
+                      "ハッシュ表 (チェイン法) 完了", "#44aa44", finished=True)
+
+
+# ===========================================================================
+# Ch.8: B木 (type: "misc")
+# ===========================================================================
+
+class _BTNode:
+    __slots__ = ('keys', 'children', 'leaf')
+    def __init__(self, leaf=True):
+        self.keys     = []
+        self.children = []
+        self.leaf     = leaf
+
+
+def _bt_clone(node):
+    if node is None:
+        return None
+    n = _BTNode(node.leaf)
+    n.keys     = list(node.keys)
+    n.children = [_bt_clone(c) for c in node.children]
+    return n
+
+
+def _bt_node_to_dict(node, hl_map=None):
+    if node is None:
+        return None
+    hl = [(hl_map or {}).get(k) for k in node.keys]
+    return {
+        "keys":      list(node.keys),
+        "highlight": hl,
+        "children":  [_bt_node_to_dict(c, hl_map) for c in node.children],
+    }
+
+
+def _bt_obj(id, root, hl_map=None, t=2, label="", weight=1):
+    return {"id": id, "type": "btree_view",
+            "root": _bt_node_to_dict(root, hl_map),
+            "t": t, "label": label, "weight": weight}
+
+
+def _bt_split_child(parent, i, t):
+    """parent.children[i] が満杯 → 分割して中央値を parent に昇格"""
+    full  = parent.children[i]
+    mid   = t - 1
+    med   = full.keys[mid]
+
+    new_c       = _BTNode(full.leaf)
+    new_c.keys  = full.keys[mid + 1:]
+    if not full.leaf:
+        new_c.children = full.children[t:]
+
+    full.keys = full.keys[:mid]
+    if not full.leaf:
+        full.children = full.children[:t]
+
+    parent.keys.insert(i, med)
+    parent.children.insert(i + 1, new_c)
+    return med
+
+
+def bt_operations(n, **kwargs):
+    """Ch.8: B木 (t=2) の挿入を可視化"""
+    from random import sample
+    t        = 2
+    MAX_KEYS = 2 * t - 1
+    N        = max(5, min(int(n), 24))
+    vals     = sample(range(1, 200), N)
+
+    base = [{"message": f"B木  t={t} (2-3-4木)  N={N}  (Ch.8)", "color": "white"}]
+
+    root = [_BTNode(leaf=True)]  # root[0] so it can be reassigned in nested scope
+
+    def snap_bt(hl=None, msg="", color="lightgreen", finished=False):
+        r = root[0] if root[0].keys else None
+        return _f([_bt_obj("btree", r, hl, t, f"B木  t={t}")],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield snap_bt(msg="B木 初期化 (空)")
+
+    for v in vals:
+        yield snap_bt(msg=f"insert({v}) 開始  ─ 挿入位置を探索", color="cyan")
+
+        # 根が満杯なら先に分割
+        if len(root[0].keys) == MAX_KEYS:
+            new_root          = _BTNode(leaf=False)
+            new_root.children = [root[0]]
+            med = _bt_split_child(new_root, 0, t)
+            root[0] = new_root
+            yield _f([_bt_obj("btree", root[0], {med: "orange"}, t, f"B木  t={t}")],
+                     base + [{"message": f"insert({v}): 根が満杯 → 分割  中央値={med} が新根へ",
+                              "color": "orange"}])
+
+        # 降下しながら挿入
+        node = root[0]
+        while not node.leaf:
+            i = len(node.keys) - 1
+            while i >= 0 and v < node.keys[i]:
+                i -= 1
+            i += 1
+
+            yield _f([_bt_obj("btree", root[0], {k: "#44aaff" for k in node.keys}, t, f"B木  t={t}")],
+                     base + [{"message": f"insert({v}): node={node.keys}  → children[{i}] へ降下",
+                              "color": "cyan"}])
+
+            child = node.children[i]
+            if len(child.keys) == MAX_KEYS:
+                med = _bt_split_child(node, i, t)
+                yield _f([_bt_obj("btree", root[0], {med: "orange"}, t, f"B木  t={t}")],
+                         base + [{"message": f"insert({v}): children[{i}] が満杯 → 分割  中央値={med}",
+                                  "color": "orange"}])
+                if v > med:
+                    i += 1
+            node = node.children[i]
+
+        # 葉に挿入
+        idx = len(node.keys)
+        node.keys.append(None)
+        while idx > 0 and v < node.keys[idx - 1]:
+            node.keys[idx] = node.keys[idx - 1]
+            idx -= 1
+        node.keys[idx] = v
+
+        yield _f([_bt_obj("btree", root[0], {v: "#44ff88"}, t, f"B木  t={t}")],
+                 base + [{"message": f"insert({v}) 完了  葉={node.keys}", "color": "lightgreen"}])
+
+    yield snap_bt(msg=f"B木 構築完了  {N}個挿入", finished=True)
+
+
+# ===========================================================================
+# Ch.7: 二分木の走査 (Sample7_2)
+# ===========================================================================
+
+def _make_complete_btree(vals):
+    """配列から完全二分木を構築 (index ベース)"""
+    N = len(vals)
+    def build(i):
+        if i >= N:
+            return None
+        return {
+            "key":       vals[i],
+            "color":     "#4472C4",
+            "highlight": None,
+            "dim":       False,
+            "left":      build(2 * i + 1),
+            "right":     build(2 * i + 2),
+        }
+    return build(0)
+
+
+def _clone_bt(node, visited_keys=None, active_key=None):
+    """二分木をディープコピーし、visited_keys を highlight 付きで返す"""
+    if node is None:
+        return None
+    v = node["key"]
+    is_active  = (active_key  is not None and v == active_key)
+    is_visited = (visited_keys is not None and v in visited_keys)
+    hl = "yellow" if is_active else ("#44aa44" if is_visited else None)
+    return {
+        "key":       v,
+        "color":     node.get("color", "#4472C4"),
+        "highlight": hl,
+        "dim":       False,
+        "left":      _clone_bt(node["left"],  visited_keys, active_key),
+        "right":     _clone_bt(node["right"], visited_keys, active_key),
+    }
+
+
+def _bfs_order(root):
+    from collections import deque
+    order = []
+    q = deque([root])
+    while q:
+        node = q.popleft()
+        if node is None:
+            continue
+        order.append(node["key"])
+        q.append(node["left"])
+        q.append(node["right"])
+    return order
+
+
+def _preorder(root):
+    if root is None:
+        return []
+    return [root["key"]] + _preorder(root["left"]) + _preorder(root["right"])
+
+
+def _inorder(root):
+    if root is None:
+        return []
+    return _inorder(root["left"]) + [root["key"]] + _inorder(root["right"])
+
+
+def _postorder(root):
+    if root is None:
+        return []
+    return _postorder(root["left"]) + _postorder(root["right"]) + [root["key"]]
+
+
+def _bst_obj(id_, root_dict, label="", weight=3):
+    return {"id": id_, "type": "bst_tree", "root": root_dict,
+            "label": label, "weight": weight}
+
+
+def btree_traversals(n, **kwargs):
+    """Ch.7: 二分木の BFS / DFS 前順・中順・後順 (Sample7_2)"""
+    from random import sample as _sample
+    N = max(4, min(int(n), 15))
+    vals = _sample(range(1, 100), N)
+    root = _make_complete_btree(vals)
+
+    base = [{"message": f"完全二分木  N={N}", "color": "white"}]
+
+    # ── 初期フレーム (全ノード未訪問) ──
+    yield _f([_bst_obj("tree", _clone_bt(root))], base)
+
+    traversals = [
+        ("BFS (幅優先・レベル順)",     _bfs_order(root)),
+        ("DFS 前順 (pre-order: 根→左→右)", _preorder(root)),
+        ("DFS 中順 (in-order:  左→根→右)", _inorder(root)),
+        ("DFS 後順 (post-order: 左→右→根)", _postorder(root)),
+    ]
+
+    for tname, order in traversals:
+        visited = set()
+        # タイトルフレーム
+        yield _f([_bst_obj("tree", _clone_bt(root))],
+                 base + [{"message": f"── {tname} ──", "color": "cyan"}])
+
+        for key in order:
+            visited.add(key)
+            tree_snap = _clone_bt(root, visited_keys=visited - {key}, active_key=key)
+            seq_str = " → ".join(str(k) for k in order[:len(visited)])
+            yield _f(
+                [_bst_obj("tree", tree_snap)],
+                base + [
+                    {"message": f"── {tname} ──", "color": "cyan"},
+                    {"message": f"訪問: {key}", "color": "yellow"},
+                    {"message": f"順序: {seq_str}", "color": "lightgreen"},
+                ],
+            )
+
+        # 完了フレーム（全ノード緑）
+        seq_str = " → ".join(str(k) for k in order)
+        yield _f(
+            [_bst_obj("tree", _clone_bt(root, visited_keys=set(order)))],
+            base + [
+                {"message": f"── {tname} 完了 ──", "color": "cyan"},
+                {"message": f"順序: {seq_str}", "color": "#44aa44"},
+            ],
+        )
+
+    yield _f(
+        [_bst_obj("tree", _clone_bt(root, visited_keys=set(vals)))],
+        base + [{"message": "全走査完了", "color": "#44aa44"}],
+        finished=True,
+    )
+
+
+# ===========================================================================
+# Ch.7: 演算木の構築 (Sample7_3)
+# ===========================================================================
+
+def _expr_node_dict(node_id, key, color="#c87040",
+                    highlight=None, dim=False, left=None, right=None):
+    return {"key": key, "color": color, "highlight": highlight,
+            "dim": dim, "left": left, "right": right, "_id": node_id}
+
+
+def _build_expr_tree(tokens):
+    """RPN トークンリストから演算木を構築し、ルートを返す。
+    各ノードに一意の _id (連番) を付与する。"""
+    stack = []
+    _ctr = [0]
+    OPERATORS = set("+-*/")
+
+    def new_id():
+        _ctr[0] += 1
+        return _ctr[0]
+
+    for tok in tokens:
+        nid = new_id()
+        if tok in OPERATORS:
+            right = stack.pop()
+            left  = stack.pop()
+            node = _expr_node_dict(nid, tok, color="#c05020", left=left, right=right)
+        else:
+            node = _expr_node_dict(nid, tok, color="#4472C4")
+        stack.append(node)
+    return stack[0]
+
+
+def _clone_expr_tree(node, done_ids, active_id=None):
+    """演算木をコピー。done_ids に含まれないノードは dim=True。"""
+    if node is None:
+        return None
+    nid = node["_id"]
+    is_done   = nid in done_ids
+    is_active = nid == active_id
+    hl = "yellow" if is_active else ("#44aa44" if is_done else None)
+    return {
+        "key":       node["key"],
+        "color":     node["color"],
+        "highlight": hl,
+        "dim":       not is_done,
+        "left":      _clone_expr_tree(node["left"],  done_ids, active_id),
+        "right":     _clone_expr_tree(node["right"], done_ids, active_id),
+        "_id":       nid,
+    }
+
+
+def _all_ids(node):
+    if node is None:
+        return []
+    return [node["_id"]] + _all_ids(node["left"]) + _all_ids(node["right"])
+
+
+def _postorder_nodes(node):
+    """ノードオブジェクトを後順で返す (演算木構築順 = 後順)"""
+    if node is None:
+        return []
+    return _postorder_nodes(node["left"]) + _postorder_nodes(node["right"]) + [node]
+
+
+def expression_tree(n, **kwargs):
+    """Ch.7: 演算木の構築 (RPN → スタック → 二分木) (Sample7_3)"""
+    # データ数に応じてプリセット式を選択
+    PRESETS = [
+        (["2", "3", "+"],                                "2 + 3",              3),
+        (["4", "2", "-", "3", "*"],                      "(4-2) × 3",          5),
+        (["2", "3", "+", "8", "1", "-", "*"],            "(2+3) × (8-1)",      7),
+        (["5", "1", "-", "4", "2", "+", "*", "3", "/"],  "((5-1)×(4+2)) ÷ 3", 9),
+    ]
+    level = max(0, min(int(n) // 6 - 1, len(PRESETS) - 1))
+    tokens, expr_str, _ = PRESETS[level]
+
+    base = [
+        {"message": f"演算木の構築: {expr_str}", "color": "white"},
+        {"message": f"逆ポーランド記法 (RPN): {' '.join(tokens)}", "color": "cyan"},
+    ]
+
+    # 完全な演算木を事前構築
+    full_tree = _build_expr_tree(tokens)
+    all_node_ids = set(_all_ids(full_tree))
+
+    # スタック状態 (表示用: リスト of 文字列)
+    OPERATORS = set("+-*/")
+
+    def _tree_to_str(node):
+        if node is None:
+            return ""
+        if node["left"] is None and node["right"] is None:
+            return node["key"]
+        return f"({_tree_to_str(node['left'])}{node['key']}{_tree_to_str(node['right'])})"
+
+    def _frame(objs, extra_texts, finished=False):
+        return _f(objs, base + extra_texts, finished=finished,
+                  text_position="bottom")
+
+    # ── 初期フレーム: トークンテープ + 全ノード dim ──
+    token_cells = _c("tokens", tokens, label="RPN トークン", weight=1)
+    tree_snap   = _clone_expr_tree(full_tree, done_ids=set())
+    yield _frame(
+        [token_cells, _bst_obj("tree", tree_snap, label="演算木", weight=2.5)],
+        [{"message": "スタック: []", "color": "lightgreen"}],
+    )
+
+    # full_tree の後順リスト = tokens の順序（RPN の性質）
+    postorder_full = _postorder_nodes(full_tree)
+
+    sim_stack2 = []
+    done_ids2  = set()
+
+    for i, (tok, node) in enumerate(zip(tokens, postorder_full)):
+        nid = node["_id"]
+        hl_map = {i: "yellow"}
+        token_cells = _c("tokens", tokens, label="RPN トークン", hl=hl_map, weight=1)
+
+        done_ids2.add(nid)
+        tree_snap = _clone_expr_tree(full_tree, done_ids=done_ids2, active_id=nid)
+
+        if tok in OPERATORS:
+            r = sim_stack2.pop()
+            l = sim_stack2.pop()
+            sim_stack2.append(node)
+            stack_disp = [_tree_to_str(nd) for nd in sim_stack2]
+            msg = f"演算子 '{tok}': 2値をポップ → ノード作成 → プッシュ"
+        else:
+            sim_stack2.append(node)
+            stack_disp = [_tree_to_str(nd) for nd in sim_stack2]
+            msg = f"オペランド '{tok}' をプッシュ"
+
+        stack_str = "[" + ",  ".join(stack_disp) + "]"
+        yield _frame(
+            [token_cells, _bst_obj("tree", tree_snap, label="演算木", weight=2.5)],
+            [
+                {"message": msg, "color": "yellow"},
+                {"message": f"スタック: {stack_str}", "color": "lightgreen"},
+            ],
+        )
+
+    # ── 完了フレーム ──
+    result_str = _tree_to_str(full_tree)
+    yield _frame(
+        [_c("tokens", tokens, label="RPN トークン", weight=1),
+         _bst_obj("tree", _clone_expr_tree(full_tree, done_ids=all_node_ids),
+                  label="演算木", weight=2.5)],
+        [{"message": f"構築完了  演算木 = {result_str}", "color": "#44aa44"}],
+        finished=True,
+    )
+
+
+# ===========================================================================
 # アルゴリズム一覧 / データサイズ一覧
 # ===========================================================================
 
@@ -662,6 +1683,20 @@ AlgorithmList = [
     ("配列スタック  (Ch.5)",        stack_array,        {"type": "misc"}),
     ("循環キュー  (Ch.5)",          queue_circular,     {"type": "misc"}),
     ("RPN 変換・評価  (Ch.5)",      rpn_eval,           {"type": "misc"}),
+    # ── Ch.6: 二分探索木 ──
+    ("BST 挿入・探索・削除  (Ch.6)", bst_operations,    {"type": "misc"}),
+    # ── Ch.7: 二分木走査 / 演算木 ──
+    ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc"}),
+    ("演算木の構築  (Ch.7)",         expression_tree,   {"type": "misc"}),
+    # ── Ch.8: 赤黒木・B木 ──
+    ("赤黒木 挿入  (Ch.8)",         rb_tree_insert,     {"type": "misc"}),
+    ("B木 挿入  (Ch.8)",            bt_operations,      {"type": "misc"}),
+    # ── Ch.11: グラフ ──
+    ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),
+    ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc"}),
+    # ── Ch.10: ハッシュ表 ──
+    ("ハッシュ表 開番地法  (Ch.10)", hash_open_addressing, {"type": "misc"}),
+    ("ハッシュ表 チェイン法  (Ch.10)", hash_chaining,    {"type": "misc"}),
 ]
 
 DataSizeList = [8, 12, 16, 20, 24]

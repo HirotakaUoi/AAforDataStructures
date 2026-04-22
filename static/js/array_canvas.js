@@ -13,6 +13,24 @@
 
 "use strict";
 
+// ---------------------------------------------------------------------------
+// カラーテーマ (canvas 背景・ラベル色のみ; オブジェクト色はフレームデータ側)
+// ---------------------------------------------------------------------------
+const AC_THEMES = {
+  dark:     { canvasBg: "#0d1117",  valueLabelColor: "#ccc",  indexLabelColor: "#4a6080",
+              foundCellBg: "#1a4a1a", foundCellText: "#44cc44" },
+  bright:   { canvasBg: "#f0f4ff",  valueLabelColor: "#334",  indexLabelColor: "#668",
+              foundCellBg: "#b8f0b8", foundCellText: "#005500" },
+  hc:       { canvasBg: "#000000",  valueLabelColor: "#fff",  indexLabelColor: "#888",
+              foundCellBg: "#003300", foundCellText: "#00ff66" },
+  hcbright: { canvasBg: "#ffffff",  valueLabelColor: "#111",  indexLabelColor: "#445",
+              foundCellBg: "#a8eea8", foundCellText: "#003300" },
+};
+let _acThemeKey = "dark";
+function _acTheme() { return AC_THEMES[_acThemeKey] ?? AC_THEMES.dark; }
+/** app.js から呼ばれる */
+function setCanvasTheme(k) { _acThemeKey = k; }
+
 class ArrayCanvas {
   /** @param {HTMLCanvasElement} canvas */
   constructor(canvas) {
@@ -31,7 +49,7 @@ class ArrayCanvas {
     ctx.clearRect(0, 0, this.cw, this.ch);
 
     // 背景
-    ctx.fillStyle = "#0d1117";
+    ctx.fillStyle = _acTheme().canvasBg;
     ctx.fillRect(0, 0, this.cw, this.ch);
 
     const nObjs = objects.length;
@@ -53,6 +71,10 @@ class ArrayCanvas {
           case "linked_list":   this._drawLinkedList(obj, areaY, eachH);   break;
           case "stack_v":       this._drawStackV(obj, areaY, eachH);       break;
           case "queue_circ":    this._drawQueueCirc(obj, areaY, eachH);    break;
+          case "bst_tree":    this._drawBstTree(obj, areaY, eachH);    break;
+          case "graph_view":  this._drawGraphView(obj, areaY, eachH);  break;
+          case "hash_table":  this._drawHashTable(obj, areaY, eachH);  break;
+          case "btree_view":  this._drawBtreeView(obj, areaY, eachH);  break;
         }
         areaY += eachH;
       }
@@ -168,7 +190,7 @@ class ArrayCanvas {
     if (HAS_TARGET) {
       const refX = PAD_L; const refY = valToY(target);
       const refH = valToH(target); const rw = REF_W - 2;
-      ctx.fillStyle = "#1a4a1a";
+      ctx.fillStyle = _acTheme().foundCellBg;
       ctx.fillRect(refX + 0.5, refY, rw - 1, refH);
       ctx.strokeStyle = "#44cc44"; ctx.lineWidth = 1.5;
       ctx.strokeRect(refX + 0.5, refY + 0.5, rw - 1, refH - 1);
@@ -177,7 +199,7 @@ class ArrayCanvas {
       ctx.beginPath(); ctx.moveTo(PAD_L + REF_W, refY);
       ctx.lineTo(chartR, refY); ctx.stroke(); ctx.restore();
       const rFs = Math.max(7, Math.min(10, REF_W * 0.4));
-      ctx.fillStyle = "#44cc44"; ctx.font = `${rFs}px monospace`;
+      ctx.fillStyle = _acTheme().foundCellText; ctx.font = `${rFs}px monospace`;
       ctx.textAlign = "center";
       ctx.fillText(String(target), refX + REF_W / 2 - 1, refY - 3);
     }
@@ -192,7 +214,7 @@ class ArrayCanvas {
       ctx.fillRect(x + 0.5, y, barW - 1, Math.max(h, 1));
       if (showLabel) {
         const fs = Math.min(11, barW * 0.65);
-        ctx.fillStyle = "#ccc"; ctx.font = `${fs}px sans-serif`;
+        ctx.fillStyle = _acTheme().valueLabelColor; ctx.font = `${fs}px sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(String(values[i]), x + barW / 2, y - 2);
       }
@@ -207,7 +229,7 @@ class ArrayCanvas {
 
     if (barW >= 14) {
       const iFs = Math.min(9, barW * 0.5);
-      ctx.fillStyle = "#4a6080"; ctx.font = `${iFs}px sans-serif`;
+      ctx.fillStyle = _acTheme().indexLabelColor; ctx.font = `${iFs}px sans-serif`;
       ctx.textAlign = "center";
       for (let i = 0; i < n; i++) {
         ctx.fillText(String(i), chartL + i * barW + barW / 2, chartB + 12);
@@ -285,13 +307,13 @@ class ArrayCanvas {
     // target セル
     if (HAS_TARGET) {
       const tx = PAD_L;
-      ctx.fillStyle = "#1a4a1a";
+      ctx.fillStyle = _acTheme().foundCellBg;
       ctx.fillRect(tx, cellY, TGT_W - 2, cellH);
       ctx.strokeStyle = "#44cc44"; ctx.lineWidth = 1.5;
       ctx.strokeRect(tx + 0.5, cellY + 0.5, TGT_W - 3, cellH - 1);
 
       const fs = Math.max(8, Math.min(13, (TGT_W - 4) * 0.4));
-      ctx.fillStyle = "#44cc44"; ctx.font = `bold ${fs}px monospace`;
+      ctx.fillStyle = _acTheme().foundCellText; ctx.font = `bold ${fs}px monospace`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(String(target), tx + (TGT_W - 2) / 2, cellY + cellH / 2);
       ctx.textBaseline = "alphabetic";
@@ -343,7 +365,7 @@ class ArrayCanvas {
       // インデックスラベル (下)
       if (cellW >= 14) {
         const iFs = Math.max(7, Math.min(9, cellW * 0.38));
-        ctx.fillStyle = "#4a6080"; ctx.font = `${iFs}px sans-serif`;
+        ctx.fillStyle = _acTheme().indexLabelColor; ctx.font = `${iFs}px sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(String(i), cx + cellW / 2, cellY + cellH + 12);
       }
@@ -1673,5 +1695,465 @@ class ArrayCanvas {
     ctx.lineTo(x,     y + r);
     ctx.arcTo(x,     y,     x + r, y,         r);
     ctx.closePath();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // bst_tree – 二分探索木 / 赤黒木
+  // ════════════════════════════════════════════════════════════════════
+  _drawBstTree(obj, areaY, areaH) {
+    const { root = null, label = "" } = obj;
+    if (!root) return;
+
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    const PAD    = 16;
+    const chartL = PAD;
+    const chartR = cw - PAD;
+    const chartT = areaY + PAD + (label ? 14 : 4);
+    const chartB = areaY + areaH - PAD;
+    const chartW = chartR - chartL;
+    const chartH = chartB - chartT;
+
+    // Count nodes + depth
+    function countNodes(node) {
+      if (!node) return 0;
+      return 1 + countNodes(node.left) + countNodes(node.right);
+    }
+    function treeDepth(node) {
+      if (!node) return 0;
+      return 1 + Math.max(treeDepth(node.left), treeDepth(node.right));
+    }
+
+    const N = countNodes(root);
+    const d = treeDepth(root);
+    if (d === 0 || N === 0) return;
+
+    const levelH = chartH / d;
+    const nodeR  = Math.max(8, Math.min(22, levelH * 0.38, chartW / (N + 1) * 0.8));
+
+    // In-order traversal to assign x positions
+    let inorderIdx = 0;
+    function assignPos(node, depth_) {
+      if (!node) return;
+      assignPos(node.left, depth_ + 1);
+      node._x = chartL + chartW * (inorderIdx + 0.5) / N;
+      node._y = chartT + levelH * (depth_ + 0.5);
+      inorderIdx++;
+      assignPos(node.right, depth_ + 1);
+    }
+    inorderIdx = 0;
+    assignPos(root, 0);
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, PAD, areaY + 14);
+    }
+
+    // Draw edges
+    function drawEdges(node) {
+      if (!node) return;
+      if (node.left) {
+        const dimEdge = node.dim || node.left.dim;
+        ctx.beginPath(); ctx.moveTo(node._x, node._y);
+        ctx.lineTo(node.left._x, node.left._y);
+        ctx.strokeStyle = dimEdge ? "#1a2535" : "#334455";
+        ctx.lineWidth   = dimEdge ? 0.5 : 1; ctx.stroke();
+        drawEdges(node.left);
+      }
+      if (node.right) {
+        const dimEdge = node.dim || node.right.dim;
+        ctx.beginPath(); ctx.moveTo(node._x, node._y);
+        ctx.lineTo(node.right._x, node.right._y);
+        ctx.strokeStyle = dimEdge ? "#1a2535" : "#334455";
+        ctx.lineWidth   = dimEdge ? 0.5 : 1; ctx.stroke();
+        drawEdges(node.right);
+      }
+    }
+    drawEdges(root);
+
+    // Draw nodes
+    const fs = Math.max(7, Math.min(13, nodeR * 0.75));
+    function drawNodes(node) {
+      if (!node) return;
+      const { _x: x, _y: y, color = "#4472C4", highlight = null, dim = false } = node;
+
+      if (dim) {
+        // Ghost / unbuilt node
+        ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2);
+        ctx.fillStyle = "#0f1820"; ctx.fill();
+        ctx.strokeStyle = "#1c2d3e"; ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.fillStyle = "#253545"; ctx.font = `${fs}px monospace`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(node.key), x, y); ctx.textBaseline = "alphabetic";
+      } else {
+        // Node circle
+        ctx.beginPath();
+        ctx.arc(x, y, nodeR, 0, Math.PI * 2);
+        ctx.fillStyle = "#0d1117";
+        ctx.fill();
+
+        // Tinted fill
+        ctx.save();
+        ctx.globalAlpha = highlight ? 0.5 : 0.35;
+        ctx.fillStyle   = highlight || color;
+        ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Stroke
+        ctx.strokeStyle = highlight || color;
+        ctx.lineWidth   = highlight ? 2.5 : 1.5;
+        ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2); ctx.stroke();
+
+        // Key label
+        ctx.fillStyle    = "#ffffff";
+        ctx.font         = `bold ${fs}px monospace`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(node.key), x, y);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      drawNodes(node.left);
+      drawNodes(node.right);
+    }
+    drawNodes(root);
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // graph_view – 有向 / 無向グラフ
+  // ════════════════════════════════════════════════════════════════════
+  _drawGraphView(obj, areaY, areaH) {
+    const { nodes = [], edges = [], label = "", directed = false } = obj;
+    if (nodes.length === 0) return;
+
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    const PAD    = 24;
+    const chartL = PAD;
+    const chartR = cw - PAD;
+    const chartT = areaY + PAD + (label ? 14 : 4);
+    const chartB = areaY + areaH - PAD;
+    const chartW = chartR - chartL;
+    const chartH = chartB - chartT;
+
+    const px = (xr) => chartL + xr * chartW;
+    const py = (yr) => chartT + yr * chartH;
+
+    const nodeR = Math.max(14, Math.min(24, Math.min(chartW, chartH) / (nodes.length * 0.9 + 2)));
+    const fs    = Math.max(8, Math.min(13, nodeR * 0.65));
+
+    // Build position map
+    const pos = {};
+    for (const n of nodes) pos[n.id] = { x: px(n.x), y: py(n.y) };
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, PAD, areaY + 14);
+    }
+
+    // Draw edges first
+    for (const e of edges) {
+      const p1 = pos[e.from], p2 = pos[e.to];
+      if (!p1 || !p2) continue;
+      const col = e.highlight ? "#ffcc44" : "#2a4060";
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = e.highlight ? 2.5 : 1.2;
+      if (e.directed || directed) {
+        // Shorten line to node boundary
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        const sx = p1.x + ux * nodeR, sy = p1.y + uy * nodeR;
+        const ex = p2.x - ux * nodeR, ey = p2.y - uy * nodeR;
+        ctx.fillStyle = col;
+        this._arrow(ctx, sx, sy, ex, ey);
+      } else {
+        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+      }
+      // Edge weight label
+      if (e.weight !== undefined) {
+        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+        ctx.fillStyle = "#8899aa"; ctx.font = "9px monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(e.weight), mx + 6, my - 6);
+        ctx.textBaseline = "alphabetic";
+      }
+    }
+
+    // Draw nodes
+    for (const n of nodes) {
+      const { x, y } = pos[n.id];
+      const color = n.color || "#4472C4";
+      const hl    = n.highlight;
+
+      ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2);
+      ctx.fillStyle = "#0d1117"; ctx.fill();
+
+      ctx.save(); ctx.globalAlpha = hl ? 0.55 : 0.28;
+      ctx.fillStyle = hl || color;
+      ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+
+      ctx.strokeStyle = hl || color;
+      ctx.lineWidth   = hl ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2); ctx.stroke();
+
+      ctx.fillStyle    = "#ffffff";
+      ctx.font         = `bold ${fs}px monospace`;
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(n.label !== undefined ? n.label : n.id), x, y);
+      ctx.textBaseline = "alphabetic";
+    }
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // hash_table – ハッシュ表 (線形探索法 / チェイン法)
+  // ════════════════════════════════════════════════════════════════════
+  _drawHashTable(obj, areaY, areaH) {
+    const { slots = [], m = 0, label = "", active = -1 } = obj;
+    if (m === 0) return;
+
+    const ctx = this.ctx;
+    const cw  = this.cw;
+
+    const PAD_T  = label ? 20 : 8;
+    const PAD_B  = 6;
+    const PAD_L  = 48;   // index labels
+    const PAD_R  = 8;
+
+    const availH  = areaH - PAD_T - PAD_B;
+    const cellH   = Math.max(14, Math.min(38, availH / m));
+    const cellW   = Math.max(50, cw - PAD_L - PAD_R - 160);  // leave room for chain
+    const startX  = PAD_L + (cw - PAD_L - PAD_R - 160 - cellW) / 2 + PAD_L;
+    const chainStart = startX + cellW + 8;
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + 14);
+    }
+
+    for (let i = 0; i < m; i++) {
+      const cellY  = areaY + PAD_T + i * cellH;
+      const slot   = slots[i] || { key: null, highlight: null, chain: [] };
+      const isAct  = (i === active);
+      const hl     = slot.highlight;
+
+      // Index label
+      ctx.fillStyle = _acTheme().indexLabelColor; ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`[${i}]`, startX - 6, cellY + cellH * 0.65);
+
+      // Main cell
+      ctx.fillStyle = (slot.key !== null || (slot.chain && slot.chain.length > 0))
+                      ? "#1c2a3a" : "#0a0e18";
+      ctx.fillRect(startX, cellY, cellW, cellH - 1);
+
+      if (hl || isAct) {
+        ctx.save(); ctx.globalAlpha = 0.38;
+        ctx.fillStyle = hl || "#ffcc44";
+        ctx.fillRect(startX, cellY, cellW, cellH - 1);
+        ctx.restore();
+      }
+
+      ctx.strokeStyle = hl ? hl : (isAct ? "#ffcc44" : (slot.key !== null ? "#4472C4" : "#1e2833"));
+      ctx.lineWidth   = (hl || isAct) ? 2 : 0.8;
+      ctx.strokeRect(startX + 0.5, cellY + 0.5, cellW - 1, cellH - 2);
+
+      if (slot.key !== null) {
+        const fs = Math.max(8, Math.min(13, cellH * 0.50));
+        ctx.fillStyle    = hl ? hl : "#ddd";
+        ctx.font         = `bold ${fs}px monospace`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(slot.key), startX + cellW / 2, cellY + cellH / 2);
+        ctx.textBaseline = "alphabetic";
+      } else if (!slot.chain || slot.chain.length === 0) {
+        // Empty marker
+        ctx.fillStyle = "#2a3a4a"; ctx.font = "9px monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("—", startX + cellW / 2, cellY + cellH / 2);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      // Chain nodes (for chaining)
+      if (slot.chain && slot.chain.length > 0) {
+        const chainCellW = Math.max(cellH * 0.9, 24);
+        let cx = chainStart;
+        for (let j = 0; j < slot.chain.length; j++) {
+          // Arrow connector
+          ctx.strokeStyle = "#5577aa"; ctx.lineWidth = 1;
+          const ax1 = j === 0 ? startX + cellW : cx - 8;
+          ctx.beginPath(); ctx.moveTo(ax1, cellY + cellH / 2);
+          ctx.lineTo(cx - 1, cellY + cellH / 2); ctx.stroke();
+          ctx.fillStyle = "#5577aa";
+          ctx.beginPath();
+          ctx.moveTo(cx - 1, cellY + cellH / 2);
+          ctx.lineTo(cx - 7, cellY + cellH / 2 - 3);
+          ctx.lineTo(cx - 7, cellY + cellH / 2 + 3);
+          ctx.closePath(); ctx.fill();
+
+          // Chain node box
+          ctx.fillStyle = "#1a2f3a";
+          ctx.fillRect(cx, cellY + 1, chainCellW, cellH - 3);
+          ctx.strokeStyle = (slot.chainHL && slot.chainHL[j]) ? slot.chainHL[j] : "#4472C4";
+          ctx.lineWidth = (slot.chainHL && slot.chainHL[j]) ? 2 : 0.8;
+          ctx.strokeRect(cx + 0.5, cellY + 1.5, chainCellW - 1, cellH - 4);
+
+          const fs2 = Math.max(7, Math.min(11, chainCellW * 0.42));
+          ctx.fillStyle    = "#ddd";
+          ctx.font         = `${fs2}px monospace`;
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(slot.chain[j]), cx + chainCellW / 2, cellY + cellH / 2);
+          ctx.textBaseline = "alphabetic";
+
+          cx += chainCellW + 10;
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // btree_view – B木 (2-3-4木など最小次数 t=2)
+  // ════════════════════════════════════════════════════════════════════
+  _drawBtreeView(obj, areaY, areaH) {
+    const { root = null, label = "", t = 2 } = obj;
+    if (!root) return;
+
+    const ctx = this.ctx;
+    const cw  = this.cw;
+    const MAX_KEYS = 2 * t - 1;
+
+    const PAD    = 12;
+    const chartL = PAD;
+    const chartR = cw - PAD;
+    const chartT = areaY + PAD + (label ? 14 : 4);
+    const chartB = areaY + areaH - PAD;
+    const chartW = chartR - chartL;
+    const chartH = chartB - chartT;
+
+    // ── レイアウト計算 ──────────────────────────────────────────────
+    function treeDepth(node) {
+      if (!node || !node.children || node.children.length === 0) return 1;
+      return 1 + Math.max(...node.children.map(treeDepth));
+    }
+    // 各ノードの「葉数」を数える (レイアウト幅の基準)
+    function leafCount(node) {
+      if (!node || !node.children || node.children.length === 0)
+        return Math.max(1, node ? node.keys.length : 1);
+      return node.children.reduce((s, c) => s + leafCount(c), 0);
+    }
+
+    const depth  = treeDepth(root);
+    const totalL = leafCount(root);
+    const levelH = chartH / depth;
+    // セル幅: 利用可能幅を葉数×最大キー数で割る
+    const CELL_W = Math.max(16, Math.min(32, chartW / (totalL * MAX_KEYS)));
+    const NODE_H = Math.max(16, Math.min(30, levelH * 0.48));
+
+    // ── 座標割り当て (再帰) ─────────────────────────────────────────
+    let leafIdx = 0;
+    function assignPos(node, d) {
+      const y = chartT + levelH * (d + 0.5);
+      if (!node.children || node.children.length === 0) {
+        // 葉ノード: 左から順に配置
+        const w   = Math.max(1, node.keys.length);
+        node._x   = chartL + chartW * (leafIdx + w / 2) / totalL;
+        node._y   = y;
+        leafIdx  += w;
+      } else {
+        // 内部ノード: 子を先に配置し、子の中心に自分を置く
+        const startIdx = leafIdx;
+        for (const child of node.children) assignPos(child, d + 1);
+        const endIdx = leafIdx;
+        node._x = chartL + chartW * (startIdx + (endIdx - startIdx) / 2) / totalL;
+        node._y = y;
+      }
+    }
+    leafIdx = 0;
+    assignPos(root, 0);
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, PAD, areaY + 14);
+    }
+
+    // ── 辺の描画 ───────────────────────────────────────────────────
+    function drawEdges(node) {
+      if (!node.children || node.children.length === 0) return;
+      const nk  = node.keys.length;
+      const nw  = nk * CELL_W;
+      for (let ci = 0; ci < node.children.length; ci++) {
+        const child = node.children[ci];
+        // 親の接続点: キーとキーの間（ci 番目の隙間）
+        const frac = (ci + 0.5) / (nk + 1);
+        const px   = node._x - nw / 2 + frac * nw;
+        const py   = node._y + NODE_H / 2;
+        const cy   = child._y - NODE_H / 2;
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(child._x, cy);
+        ctx.strokeStyle = "#334455"; ctx.lineWidth = 1; ctx.stroke();
+        drawEdges(child);
+      }
+    }
+    drawEdges(root);
+
+    // ── ノードの描画 ───────────────────────────────────────────────
+    const fs = Math.max(7, Math.min(13, CELL_W * 0.5, NODE_H * 0.55));
+    function drawNode(node) {
+      const nk = node.keys.length;
+      const nw = nk * CELL_W;
+      const nx = node._x - nw / 2;
+      const ny = node._y - NODE_H / 2;
+
+      for (let ki = 0; ki < nk; ki++) {
+        const cx = nx + ki * CELL_W;
+        const hl = node.highlight && node.highlight[ki];
+
+        // 背景
+        ctx.fillStyle = "#1c2a3a";
+        ctx.fillRect(cx, ny, CELL_W - 1, NODE_H);
+        if (hl) {
+          ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = hl;
+          ctx.fillRect(cx, ny, CELL_W - 1, NODE_H); ctx.restore();
+        }
+
+        // 枠線
+        ctx.strokeStyle = hl || "#4472C4";
+        ctx.lineWidth   = hl ? 2 : 0.8;
+        ctx.strokeRect(cx + 0.5, ny + 0.5, CELL_W - 2, NODE_H - 1);
+
+        // キー値
+        ctx.fillStyle    = "#ffffff";
+        ctx.font         = `bold ${fs}px monospace`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(node.keys[ki]), cx + CELL_W / 2, node._y);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      if (node.children) {
+        for (const child of node.children) drawNode(child);
+      }
+    }
+    drawNode(root);
+
+    ctx.restore();
   }
 }
