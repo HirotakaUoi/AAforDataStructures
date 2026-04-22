@@ -18,8 +18,8 @@ def _f(objects, texts=None, finished=False, found=None, text_position="top"):
             "found": found, "text_position": text_position}
 
 def _c(id, values, label="", hl=None, fills=None, ptr=None,
-       watchman=None, target=None, weight=1):
-    return {
+       watchman=None, target=None, weight=1, unused_from=None):
+    obj = {
         "id": id, "type": "array1d_cells",
         "values": list(values), "label": label,
         "highlights": {str(k): v for k, v in (hl or {}).items()},
@@ -27,6 +27,9 @@ def _c(id, values, label="", hl=None, fills=None, ptr=None,
         "watchman_index": watchman, "target": target,
         "weight": weight,
     }
+    if unused_from is not None:
+        obj["unused_from"] = int(unused_from)
+    return obj
 
 def _ptr(index, label, color="#cc00cc"):
     return {"index": index, "label": str(label), "color": color}
@@ -76,51 +79,232 @@ def _queue_circ(id, values, front, back, count, label="", hl=None, weight=1):
 # Ch.3: vector / イテレータ (type: "misc")
 # ===========================================================================
 
-def vector_capacity(n, **kwargs):
-    """Sample3_1: vector の push_back で capacity が倍増する様子を可視化"""
-    N = max(4, min(int(n), 20))
-    seed_vals = [5, 2, 7, 1, 5, 10, 100, 25, 99]
-    push_vals = (seed_vals + [randint(1, 99) for _ in range(max(0, N - len(seed_vals)))])[:N]
+def vector_capacity(n, scheme="double", **kwargs):
+    """Sample3_1: vector の push_back で capacity が変化する様子を可視化
+    scheme="double"  : 満杯になるたびに capacity を 2倍に拡張
+    scheme="fixed16" : 満杯になるたびに capacity を +16 ずつ拡張
+    再確保時は旧配列・新配列を並列表示してコピーをアニメーション。
+    """
+    N = max(4, min(int(n), 256))
+    seed_vals = [5, 2, 7, 1, 5, 10, 100, 25, 99,
+                 42, 77, 33, 88, 14, 61, 50]
+    push_vals = (seed_vals + [randint(1, 99)
+                              for _ in range(max(0, N - len(seed_vals)))])[:N]
+
+    SCHEME_LABEL = "2倍拡張" if scheme == "double" else "固定+16拡張"
 
     def sim_cap(size):
+        """現在の size に対して必要な capacity を返す"""
         if size == 0:
             return 0
-        c = 1
-        while c < size:
-            c *= 2
-        return c
+        if scheme == "double":
+            c = 1
+            while c < size:
+                c *= 2
+            return c
+        else:                   # fixed16
+            step = 16
+            c = step
+            while c < size:
+                c += step
+            return c
 
-    base = [{"message": f"vector の capacity と size の変化  push_back × {N}  (Sample3_1)",
+    def vec_obj(data, size, capacity, hl=None):
+        """現在の vector を表示するセル (使用済み + unused_from 付き)"""
+        display = list(data) + [0] * (capacity - len(data))
+        return _c("vec", display,
+                  f"vector  size={size},  capacity={capacity}",
+                  hl=hl,
+                  unused_from=size if capacity > size else None)
+
+    base = [{"message":
+             f"vector capacity – {SCHEME_LABEL}  push_back × {N}  (Sample3_1)",
              "color": "white"}]
     vals = []
-    cap = 0
+    cap  = 0
 
-    yield _f([_c("vec", [0], "vector (空)", hl={0: "#1a2a1a"})],
-             base + [{"message": "vector を生成  size=0,  capacity=0", "color": "lightgreen"}])
+    # ── 初期フレーム ────────────────────────────────────────────────────
+    yield _f([_c("vec", [], "vector (空)  size=0,  capacity=0")],
+             base + [{"message": "vector を生成  size=0,  capacity=0",
+                      "color": "lightgreen"}])
 
     for v in push_vals:
+        old_size = len(vals)
+        old_cap  = cap
         vals.append(v)
-        new_cap = sim_cap(len(vals))
-        cap_grew = new_cap > cap
-        cap = new_cap
+        new_cap   = sim_cap(len(vals))
+        cap_grew  = new_cap > old_cap
 
-        display = list(vals) + [0] * (cap - len(vals))
-        hl = {i: "#1e2e1e" for i in range(len(vals), cap)}   # unused slots: 暗色
-        hl[len(vals) - 1] = "yellow"                          # 追加した要素: 黄
+        if cap_grew and old_cap > 0:
+            # ════════════════════════════════════════════════════════════
+            # 再確保 + コピーアニメーション
+            # ════════════════════════════════════════════════════════════
+            old_vals = vals[:-1]   # v を追加する前の要素列 (old_cap 個)
+            hl_full  = {i: "orange" for i in range(old_size)}
 
-        color = "orange" if cap_grew else "lightgreen"
-        msg = f"push_back({v})  →  size={len(vals)},  capacity={cap}"
-        if cap_grew:
-            msg += "  ← 再確保!"
+            # Step 1: 旧配列が満杯であることを示す
+            yield _f(
+                [_c("old", old_vals,
+                    f"旧配列  size={old_size},  capacity={old_cap}  ← 満杯!",
+                    hl=hl_full)],
+                base + [{"message":
+                         f"push_back({v})  → 配列が満杯!  再確保が必要  ({SCHEME_LABEL})",
+                         "color": "orange"}]
+            )
 
-        yield _f([_c("vec", display, f"vector  size={len(vals)},  capacity={cap}", hl=hl)],
-                 base + [{"message": msg, "color": color}])
+            # Step 2: 新しい領域を確保 (全セルが未使用)
+            yield _f(
+                [
+                    _c("old", old_vals,
+                       f"旧配列  size={old_size},  capacity={old_cap}",
+                       hl=hl_full),
+                    _c("new", [0] * new_cap,
+                       f"新配列  capacity={new_cap}  (新規確保)",
+                       unused_from=0),
+                ],
+                base + [{"message":
+                         f"新しい領域を確保  capacity: {old_cap} → {new_cap}",
+                         "color": "orange"}]
+            )
 
-    display = list(vals) + [0] * (cap - len(vals))
-    hl = {i: "#1e2e1e" for i in range(len(vals), cap)}
-    yield _f([_c("vec", display, f"vector  size={len(vals)},  capacity={cap}", hl=hl)],
-             base + [{"message": f"完了: size={len(vals)},  capacity={cap}", "color": "#44aa44"}],
-             finished=True)
+            # Step 3: 要素をコピー
+            # double  : old_size ≤ 16 → 1要素ずつ 2フレーム; > 16 → stride バッチ
+            # fixed16 : old_size ≤ 48 → 1要素ずつ 2フレーム; > 48 → stride バッチ
+            copied = [0] * new_cap
+            DETAIL_THRESH = 16 if scheme == "double" else 48
+            if old_size <= DETAIL_THRESH:
+                for i in range(old_size):
+                    yield _f(
+                        [
+                            _c("old", old_vals,
+                               f"旧配列  [{i}] をコピー中",
+                               hl={i: "yellow"}),
+                            _c("new", copied,
+                               f"新配列  ({i}/{old_size} コピー済)",
+                               unused_from=i),
+                        ],
+                        base + [{"message":
+                                 f"コピー: old[{i}] = {old_vals[i]}  →  new[{i}]",
+                                 "color": "cyan"}]
+                    )
+                    copied[i] = old_vals[i]
+                    yield _f(
+                        [
+                            _c("old", old_vals,
+                               f"旧配列  [{i}] をコピー中",
+                               hl={i: "yellow"}),
+                            _c("new", copied,
+                               f"新配列  ({i+1}/{old_size} コピー済)",
+                               hl={i: "#44aaff"},
+                               unused_from=(i + 1) if (i + 1) < new_cap else None),
+                        ],
+                        base + [{"message": f"コピー完了: new[{i}] ← {copied[i]}",
+                                 "color": "cyan"}]
+                    )
+            else:
+                stride = max(1, old_size // 16)
+                for i in range(old_size):
+                    copied[i] = old_vals[i]
+                    if (i % stride == stride - 1) or (i == old_size - 1):
+                        batch_start = (i // stride) * stride
+                        yield _f(
+                            [
+                                _c("old", old_vals,
+                                   f"旧配列  (コピー中)",
+                                   hl={j: "yellow"
+                                       for j in range(batch_start, i + 1)}),
+                                _c("new", copied,
+                                   f"新配列  ({i+1}/{old_size} コピー済)",
+                                   hl={j: "#44aaff"
+                                       for j in range(batch_start, i + 1)},
+                                   unused_from=(i + 1) if (i + 1) < new_cap
+                                               else None),
+                            ],
+                            base + [{"message":
+                                     f"コピー中: [{batch_start}..{i}]"
+                                     f"  ({i+1}/{old_size} 完了)",
+                                     "color": "cyan"}]
+                        )
+
+            # Step 4: コピー完了・旧配列を解放
+            yield _f(
+                [_c("new", copied,
+                    f"新配列  コピー完了  size={old_size},  capacity={new_cap}",
+                    unused_from=old_size if new_cap > old_size else None)],
+                base + [{"message":
+                         f"旧配列を解放  新配列に切り替え  capacity={new_cap}",
+                         "color": "orange"}]
+            )
+
+            cap = new_cap
+
+            # Step 5: 新要素を追加
+            yield _f(
+                [vec_obj(vals, len(vals), cap,
+                         hl={len(vals) - 1: "yellow"})],
+                base + [{"message":
+                         f"push_back({v}) 完了  size={len(vals)},"
+                         f"  capacity={cap}  ← 再確保!",
+                         "color": "orange"}]
+            )
+
+        elif cap_grew and old_cap == 0:
+            # ── 初回確保 ────────────────────────────────────────────────
+            cap = new_cap
+            yield _f(
+                [vec_obj(vals, len(vals), cap,
+                         hl={len(vals) - 1: "yellow"})],
+                base + [{"message":
+                         f"push_back({v})  初回確保  size={len(vals)},"
+                         f"  capacity={cap}",
+                         "color": "orange"}]
+            )
+
+        else:
+            # ── 再確保なし ──────────────────────────────────────────────
+            cap = new_cap
+            yield _f(
+                [vec_obj(vals, len(vals), cap,
+                         hl={len(vals) - 1: "yellow"})],
+                base + [{"message":
+                         f"push_back({v})  →  size={len(vals)},"
+                         f"  capacity={cap}",
+                         "color": "lightgreen"}]
+            )
+
+    # ── 完了フレーム ────────────────────────────────────────────────────
+    yield _f(
+        [vec_obj(vals, len(vals), cap)],
+        base + [{"message":
+                 f"完了: size={len(vals)},  capacity={cap}"
+                 f"  (拡張回数: {_realloc_count(N, scheme)}回)",
+                 "color": "#44aa44"}],
+        finished=True
+    )
+
+
+def _realloc_count(n, scheme):
+    """push_back × n で発生する再確保回数を返す (表示用)"""
+    cap = 0; count = 0
+    for i in range(1, n + 1):
+        if scheme == "double":
+            nc = 1
+            while nc < i: nc *= 2
+        else:
+            nc = 16
+            while nc < i: nc += 16
+        if nc > cap: cap = nc; count += 1
+    return count - (1 if n > 0 else 0)  # 初回確保は除く
+
+
+def vector_capacity_double(n, **kwargs):
+    """vector capacity – 2倍拡張"""
+    return vector_capacity(n, scheme="double", **kwargs)
+
+
+def vector_capacity_fixed16(n, **kwargs):
+    """vector capacity – 固定+16拡張"""
+    return vector_capacity(n, scheme="fixed16", **kwargs)
 
 
 def vector_ops(n, **kwargs):
@@ -1671,7 +1855,8 @@ def expression_tree(n, **kwargs):
 
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
-    ("vector capacity  (Ch.3)",    vector_capacity,    {"type": "misc"}),
+    ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
+    ("vector capacity – 固定+16拡張  (Ch.3)", vector_capacity_fixed16, {"type": "misc"}),
     ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc"}),
     ("イテレータ・3要素合計  (Ch.3)", iterator_sum3,      {"type": "misc"}),
     # ── Ch.4: 連結リスト ──
@@ -1699,4 +1884,4 @@ AlgorithmList = [
     ("ハッシュ表 チェイン法  (Ch.10)", hash_chaining,    {"type": "misc"}),
 ]
 
-DataSizeList = [8, 12, 16, 20, 24]
+DataSizeList = [8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256]

@@ -140,9 +140,13 @@ function _updateContainerSize() {
 function syncSize() {
   const panels = [...document.querySelectorAll(".panel")];
   if (panels.length < 2) return;
-  const front = panels.reduce((a, b) =>
-    (parseInt(b.style.zIndex) || 1) > (parseInt(a.style.zIndex) || 1) ? b : a
-  );
+  // ユーザーが最後に手動クリック/ドラッグしたパネル (.front) を基準とする。
+  // まだ一度もクリックされていなければ zIndex が最大のものを使う。
+  const front =
+    document.querySelector(".panel.front") ||
+    panels.reduce((a, b) =>
+      (parseInt(b.style.zIndex) || 1) > (parseInt(a.style.zIndex) || 1) ? b : a
+    );
   const w = front.offsetWidth, h = front.offsetHeight;
   panels.forEach(el => {
     if (el !== front) { el.style.width = w + "px"; el.style.height = h + "px"; }
@@ -237,7 +241,12 @@ class ArrayPanel {
     this._bind();
     this._populateSelects();
     this._updateParamVisibility();
-    this._bringToFront();
+    // 生成時は視覚的に最前面へ積むだけ (.front クラスはセットしない)
+    // .front はユーザーがクリック/ドラッグしたときだけ付与 → サイズ統一の基準になる
+    { let mz = 0;
+      document.querySelectorAll(".panel").forEach(p =>
+        { mz = Math.max(mz, parseInt(p.style.zIndex) || 1); });
+      el.style.zIndex = mz + 1; }
     requestAnimationFrame(() => this._drawPreview());
     return el;
   }

@@ -268,6 +268,7 @@ class ArrayCanvas {
       highlights = {}, fills = [],
       pointer = null, watchman_index = null,
       target = null,
+      unused_from = null,   // この添字以降は「確保済み・未使用」スロット
     } = obj;
     const n = values.length;
     if (n === 0) return;
@@ -331,41 +332,87 @@ class ArrayCanvas {
       const cx          = startX + i * cellW;
       const isWatchman  = (watchman_index === i);
       const hlColor     = highlights[String(i)];
+      const isUnused    = (unused_from !== null && i >= unused_from);
 
-      // 背景
-      if (isWatchman) {
-        ctx.fillStyle = "#3d2000";
+      if (isUnused) {
+        // ── 確保済み・未使用スロット ─────────────────────────────────
+        // 背景: 濃いネイビー（通常より暗め）
+        ctx.fillStyle = "#0e1520";
         ctx.fillRect(cx, cellY, cellW - 1, cellH);
-      } else if (hlColor) {
-        ctx.fillStyle = "#1c2a3a";
-        ctx.fillRect(cx, cellY, cellW - 1, cellH);
-        ctx.save(); ctx.globalAlpha = 0.35;
-        ctx.fillStyle = hlColor;
-        ctx.fillRect(cx, cellY, cellW - 1, cellH);
+
+        // ハッチング (斜め縞) で「空き領域」を強調
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cx, cellY, cellW - 1, cellH);
+        ctx.clip();
+        ctx.strokeStyle = "rgba(80,120,180,0.22)";
+        ctx.lineWidth = 1;
+        const step = Math.max(5, cellW * 0.28);
+        for (let d = -cellH; d < cellW + cellH; d += step) {
+          ctx.beginPath();
+          ctx.moveTo(cx + d,          cellY);
+          ctx.lineTo(cx + d + cellH,  cellY + cellH);
+          ctx.stroke();
+        }
         ctx.restore();
+
+        // 破線ボーダー
+        ctx.save();
+        ctx.strokeStyle = "rgba(80,130,200,0.55)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(cx + 0.5, cellY + 0.5, cellW - 2, cellH - 1);
+        ctx.restore();
+
+        // テキスト: em ダッシュ（値を表示しない）
+        const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
+        ctx.fillStyle    = "rgba(80,130,200,0.60)";
+        ctx.font         = `${fs}px monospace`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("–", cx + cellW / 2, cellY + cellH / 2);
+        ctx.textBaseline = "alphabetic";
+
       } else {
-        ctx.fillStyle = "#1c2a3a";
-        ctx.fillRect(cx, cellY, cellW - 1, cellH);
+        // ── 通常セル ─────────────────────────────────────────────────
+        // 背景
+        if (isWatchman) {
+          ctx.fillStyle = "#3d2000";
+          ctx.fillRect(cx, cellY, cellW - 1, cellH);
+        } else if (hlColor) {
+          ctx.fillStyle = "#1c2a3a";
+          ctx.fillRect(cx, cellY, cellW - 1, cellH);
+          ctx.save(); ctx.globalAlpha = 0.35;
+          ctx.fillStyle = hlColor;
+          ctx.fillRect(cx, cellY, cellW - 1, cellH);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = "#1c2a3a";
+          ctx.fillRect(cx, cellY, cellW - 1, cellH);
+        }
+
+        // ボーダー
+        ctx.strokeStyle = isWatchman ? "#cc6600" : hlColor ? hlColor : "#336699";
+        ctx.lineWidth   = isWatchman ? 2 : hlColor ? 1.5 : 1;
+        ctx.strokeRect(cx + 0.5, cellY + 0.5, cellW - 2, cellH - 1);
+
+        // 値ラベル
+        const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
+        ctx.fillStyle    = "#ffffff";
+        ctx.font         = `${fs}px monospace`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(values[i]), cx + cellW / 2, cellY + cellH / 2);
+        ctx.textBaseline = "alphabetic";
       }
 
-      // ボーダー
-      ctx.strokeStyle = isWatchman ? "#cc6600" : hlColor ? hlColor : "#336699";
-      ctx.lineWidth   = isWatchman ? 2 : hlColor ? 1.5 : 1;
-      ctx.strokeRect(cx + 0.5, cellY + 0.5, cellW - 2, cellH - 1);
-
-      // 値ラベル
-      const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
-      ctx.fillStyle    = "#ffffff";
-      ctx.font         = `${fs}px monospace`;
-      ctx.textAlign    = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(String(values[i]), cx + cellW / 2, cellY + cellH / 2);
-      ctx.textBaseline = "alphabetic";
-
-      // インデックスラベル (下)
+      // インデックスラベル (下) — 使用済み・未使用問わず表示
       if (cellW >= 14) {
         const iFs = Math.max(7, Math.min(9, cellW * 0.38));
-        ctx.fillStyle = _acTheme().indexLabelColor; ctx.font = `${iFs}px sans-serif`;
+        ctx.fillStyle = isUnused
+          ? "rgba(80,130,200,0.45)"
+          : _acTheme().indexLabelColor;
+        ctx.font = `${iFs}px sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(String(i), cx + cellW / 2, cellY + cellH + 12);
       }
