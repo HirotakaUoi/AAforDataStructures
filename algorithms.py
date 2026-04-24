@@ -167,64 +167,36 @@ def vector_capacity(n, scheme="double", **kwargs):
                          "color": "orange"}]
             )
 
-            # Step 3: 要素をコピー
-            # double  : old_size ≤ 16 → 1要素ずつ 2フレーム; > 16 → stride バッチ
-            # fixed16 : old_size ≤ 48 → 1要素ずつ 2フレーム; > 48 → stride バッチ
+            # Step 3: 要素を1つずつコピー
             copied = [0] * new_cap
-            DETAIL_THRESH = 16 if scheme == "double" else 48
-            if old_size <= DETAIL_THRESH:
-                for i in range(old_size):
-                    yield _f(
-                        [
-                            _c("old", old_vals,
-                               f"旧配列  [{i}] をコピー中",
-                               hl={i: "yellow"}),
-                            _c("new", copied,
-                               f"新配列  ({i}/{old_size} コピー済)",
-                               unused_from=i),
-                        ],
-                        base + [{"message":
-                                 f"コピー: old[{i}] = {old_vals[i]}  →  new[{i}]",
-                                 "color": "cyan"}]
-                    )
-                    copied[i] = old_vals[i]
-                    yield _f(
-                        [
-                            _c("old", old_vals,
-                               f"旧配列  [{i}] をコピー中",
-                               hl={i: "yellow"}),
-                            _c("new", copied,
-                               f"新配列  ({i+1}/{old_size} コピー済)",
-                               hl={i: "#44aaff"},
-                               unused_from=(i + 1) if (i + 1) < new_cap else None),
-                        ],
-                        base + [{"message": f"コピー完了: new[{i}] ← {copied[i]}",
-                                 "color": "cyan"}]
-                    )
-            else:
-                stride = max(1, old_size // 16)
-                for i in range(old_size):
-                    copied[i] = old_vals[i]
-                    if (i % stride == stride - 1) or (i == old_size - 1):
-                        batch_start = (i // stride) * stride
-                        yield _f(
-                            [
-                                _c("old", old_vals,
-                                   f"旧配列  (コピー中)",
-                                   hl={j: "yellow"
-                                       for j in range(batch_start, i + 1)}),
-                                _c("new", copied,
-                                   f"新配列  ({i+1}/{old_size} コピー済)",
-                                   hl={j: "#44aaff"
-                                       for j in range(batch_start, i + 1)},
-                                   unused_from=(i + 1) if (i + 1) < new_cap
-                                               else None),
-                            ],
-                            base + [{"message":
-                                     f"コピー中: [{batch_start}..{i}]"
-                                     f"  ({i+1}/{old_size} 完了)",
-                                     "color": "cyan"}]
-                        )
+            for i in range(old_size):
+                yield _f(
+                    [
+                        _c("old", old_vals,
+                           f"旧配列  [{i}] をコピー中",
+                           hl={i: "yellow"}),
+                        _c("new", copied,
+                           f"新配列  ({i}/{old_size} コピー済)",
+                           unused_from=i),
+                    ],
+                    base + [{"message":
+                             f"コピー: old[{i}] = {old_vals[i]}  →  new[{i}]",
+                             "color": "cyan"}]
+                )
+                copied[i] = old_vals[i]
+                yield _f(
+                    [
+                        _c("old", old_vals,
+                           f"旧配列  [{i}] をコピー中",
+                           hl={i: "yellow"}),
+                        _c("new", copied,
+                           f"新配列  ({i+1}/{old_size} コピー済)",
+                           hl={i: "#44aaff"},
+                           unused_from=(i + 1) if (i + 1) < new_cap else None),
+                    ],
+                    base + [{"message": f"コピー完了: new[{i}] ← {copied[i]}",
+                             "color": "cyan"}]
+                )
 
             # Step 4: コピー完了・旧配列を解放
             yield _f(
@@ -402,7 +374,16 @@ def iterator_sum3(n, **kwargs):
 
 def singly_linked_list(n, **kwargs):
     """Sample4_2: 片方向連結リストの操作 (add / addFirst / deleteFirst / deleteNode / find)"""
-    base = [{"message": "片方向連結リスト  (Sample4_2)", "color": "white"}]
+    # データ数をメニュー設定に従わせる（表示しやすいサイズに制限）
+    N = max(4, min(int(n), 20))
+    data = [randint(1, 99) for _ in range(N)]
+    # 操作ターゲットをデータ内の値で確定（インデックスで選択 → 重複回避）
+    del1_v   = data[1]           # deleteNode 1回目
+    first_v  = randint(1, 99)    # addFirst に追加する値
+    find_v   = data[N // 2]      # find のターゲット（中央付近）
+    del2_v   = data[N - 2]       # deleteNode 2回目（末尾付近）
+
+    base = [{"message": f"片方向連結リスト  N={N}  (Sample4_2)", "color": "white"}]
     vals = []
 
     def frame(extra_hl=None, msg="", color="lightgreen", finished=False):
@@ -424,37 +405,32 @@ def singly_linked_list(n, **kwargs):
 
     yield frame(msg="連結リスト生成 (空)")
 
-    # add(3), add(1), add(8), add(4), add(5)
-    for v in [3, 1, 8, 4, 5]:
+    # add N 個の値
+    for v in data:
         vals.append(v)
-        yield frame({len(vals) - 1: "yellow"}, msg=f"add({v})  →  {list(vals)}")
+        yield frame({len(vals) - 1: "yellow"}, msg=f"add({v})  →  size={len(vals)}")
 
-    # deleteNode(1)
-    yield frame(msg="deleteNode(1): 値 1 を線形探索...")
-    yield from traverse_and_delete(1)
-    yield frame(msg=f"deleteNode(1) 完了  →  {list(vals)}")
+    # deleteNode(del1_v)
+    yield frame(msg=f"deleteNode({del1_v}): 値 {del1_v} を線形探索...")
+    yield from traverse_and_delete(del1_v)
+    yield frame(msg=f"deleteNode({del1_v}) 完了  →  size={len(vals)}")
 
-    # addFirst(0)
-    vals.insert(0, 0)
-    yield frame({0: "yellow"}, msg=f"addFirst(0)  →  {list(vals)}")
-
-    # add(10..13)
-    for v in range(10, 14):
-        vals.append(v)
-    yield frame(msg=f"add(10)〜add(13) 完了  →  size={len(vals)}")
+    # addFirst(first_v)
+    vals.insert(0, first_v)
+    yield frame({0: "yellow"}, msg=f"addFirst({first_v})  →  size={len(vals)}")
 
     # deleteFirst()
     old_first = vals[0]
     yield _f([_ll("list", list(vals), "Singly Linked List", hl={0: "#ff4444"})],
-             base + [{"message": f"deleteFirst(): 先頭 {old_first} を削除", "color": "orange"}])
+             base + [{"message": f"deleteFirst(): 先頭 {old_first} を削除", "color": "orange"}],
+             text_position="bottom")
     vals.pop(0)
     yield frame(msg=f"deleteFirst() 完了  →  先頭={vals[0]}")
 
-    # find(8)
-    target_find = 8
-    yield frame(msg=f"find({target_find}): 線形探索...")
+    # find(find_v)
+    yield frame(msg=f"find({find_v}): 線形探索...")
     for i in range(len(vals)):
-        found = (vals[i] == target_find)
+        found = (vals[i] == find_v)
         h = {i: "#ff4444" if found else "yellow"}
         yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
                  base + [{"message": f"[{i}] = {vals[i]}  {'→ 発見!' if found else '→ 次へ'}",
@@ -463,12 +439,73 @@ def singly_linked_list(n, **kwargs):
         if found:
             break
 
-    # deleteNode(12)
-    yield frame(msg="deleteNode(12): 値 12 を線形探索...")
-    yield from traverse_and_delete(12)
-    yield frame(msg=f"deleteNode(12) 完了  →  {list(vals)}")
+    # deleteNode(del2_v) ― まだリストに残っている場合のみ
+    if del2_v in vals:
+        yield frame(msg=f"deleteNode({del2_v}): 値 {del2_v} を線形探索...")
+        yield from traverse_and_delete(del2_v)
+        yield frame(msg=f"deleteNode({del2_v}) 完了  →  size={len(vals)}")
 
     yield frame(msg=f"全操作完了  size={len(vals)}", finished=True)
+
+
+def singly_linked_list_avg4(n, **kwargs):
+    """Sample4_7: 片方向連結リスト + イテレータで 4 要素ずつの平均を計算"""
+    N = max(4, min(int(n), 32))
+    data = [randint(1, 99) for _ in range(N)]
+    base = [{"message": f"イテレータ: 4 要素ずつの平均  N={N}  (Sample4_7)", "color": "white"}]
+
+    vals   = list(data)   # linked list の内容
+    output = []           # 計算済み平均値
+
+    def out_obj():
+        if not output:
+            return _c("out", [0], "Output (空)", hl={0: "#1a1a2a"}, weight=0.7)
+        return _c("out", list(output), f"Output  ({len(output)} 要素)",
+                  hl={len(output) - 1: "#ffff44"}, weight=0.7)
+
+    def frame(hl=None, msg="", color="lightgreen", finished=False):
+        return _f(
+            [_ll("list", list(vals), f"Singly Linked List  (N={N})",
+                 hl=hl or {}, is_doubly=False, weight=1.4),
+             out_obj()],
+            base + [{"message": msg, "color": color}],
+            finished=finished, text_position="bottom")
+
+    # 初期フレーム: リスト全体を表示
+    yield frame(msg=f"リストを生成  size={N}  (イテレータ it = begin())")
+
+    i = 0
+    while i < N:
+        grp_end  = min(i + 4, N)
+        grp_size = grp_end - i
+        scanned  = []
+        run_sum  = 0
+
+        # グループ内を 1 ノードずつイテレータで走査
+        for step, idx in enumerate(range(i, grp_end)):
+            hl = {s: "#4488cc" for s in scanned}   # 走査済み: 青
+            hl[idx] = "yellow"                      # 現在ノード: 黄
+            yield frame(
+                hl=hl,
+                msg=f"it → node[{idx}] = {vals[idx]}  ({step + 1}/{grp_size} 要素目)"
+                    + (f"  sum={run_sum}+{vals[idx]}={run_sum + vals[idx]}" if step > 0 else ""),
+                color="lightgreen")
+            run_sum += vals[idx]
+            scanned.append(idx)
+
+        # 平均を計算して output へ追加
+        avg = run_sum // grp_size
+        output.append(avg)
+        sum_str = " + ".join(str(vals[j]) for j in range(i, grp_end))
+        hl_done = {j: "#44aa44" for j in range(i, grp_end)}
+        yield frame(
+            hl=hl_done,
+            msg=f"平均 = ({sum_str}) / {grp_size} = {run_sum} / {grp_size} = {avg}",
+            color="cyan")
+
+        i = grp_end
+
+    yield frame(msg=f"完了: {len(output)} 個の平均を計算", color="#44aa44", finished=True)
 
 
 def doubly_linked_list(n, **kwargs):
@@ -1860,8 +1897,9 @@ AlgorithmList = [
     ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc"}),
     ("イテレータ・3要素合計  (Ch.3)", iterator_sum3,      {"type": "misc"}),
     # ── Ch.4: 連結リスト ──
-    ("片方向連結リスト  (Ch.4)",    singly_linked_list, {"type": "misc"}),
-    ("双方向連結リスト  (Ch.4)",    doubly_linked_list, {"type": "misc"}),
+    ("片方向連結リスト  (Ch.4)",              singly_linked_list,      {"type": "misc"}),
+    ("イテレータ・4要素平均  (Ch.4)",         singly_linked_list_avg4, {"type": "misc"}),
+    ("双方向連結リスト  (Ch.4)",              doubly_linked_list,      {"type": "misc"}),
     # ── Ch.5: スタック / キュー / RPN ──
     ("連結リストスタック  (Ch.5)",  stack_linked_list,  {"type": "misc"}),
     ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc"}),
