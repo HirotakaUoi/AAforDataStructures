@@ -941,6 +941,10 @@ def bst_operations(n, **kwargs):
 
     tree = None
 
+    # ── 初期フレーム (空の BST) ────────────────────────────────────
+    yield _f([_bst_obj("bst", None, label="BST (空)")],
+             base + [{"message": f"BST 初期化 (空)  N={N} 個を挿入します", "color": "lightgreen"}])
+
     # ── 挿入フェーズ ─────────────────────────────────────────────────
     for v in vals:
         # 挿入パスを可視化
@@ -1236,6 +1240,7 @@ def graph_dfs(n, **kwargs):
     stack   = []
     order   = []
 
+    yield frame(f"グラフ初期状態  N={N}  頂点 {N} 個  辺 {len(ge_list)} 本", "cyan")
     states[start] = "start"
     stack.append(start)
     yield frame(f"DFS 開始  N={N}  start={start}  スタックに {start} をプッシュ", "cyan")
@@ -1280,6 +1285,7 @@ def graph_bfs(n, **kwargs):
     queue   = deque()
     order   = []
 
+    yield frame(f"グラフ初期状態  N={N}  頂点 {N} 個  辺 {len(ge_list)} 本", "cyan")
     visited.add(start)
     queue.append(start)
     states[start] = "start"

@@ -49,6 +49,22 @@ class StartParams(BaseModel):
     data_condition: int   = 0         # 0=ランダム 1=昇順 2=降順 3=ほぼ昇順 (sort 用)
 
 
+@app.get("/api/preview")
+def get_preview(algorithm_id: int, n: int = 16):
+    """ジェネレータの第1フレームだけ返す（実行前プレビュー用）"""
+    if algorithm_id not in range(len(AlgorithmList)):
+        return JSONResponse({"error": "invalid algorithm_id"}, status_code=400)
+    algo_name, algo_fn, algo_meta = AlgorithmList[algorithm_id]
+    try:
+        gen = algo_fn(n)
+        frame = next(gen)
+        return frame
+    except StopIteration:
+        return JSONResponse({"error": "no frames"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.post("/api/start")
 def start_session(params: StartParams):
     if params.algorithm_id not in range(len(AlgorithmList)):

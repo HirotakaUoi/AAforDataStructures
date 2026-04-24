@@ -197,17 +197,18 @@ function resetAll() {
 // ===================================================================
 class ArrayPanel {
   constructor(id) {
-    this.id          = id;
-    this.sessionId   = null;
-    this.client      = null;
-    this.arrayCanvas = null;
-    this.el          = null;
-    this.isRunning   = false;
-    this.isPaused    = false;
-    this.numItems    = 0;
-    this._lastFrame  = null;
-    this._frameCount = 0;
-    this._speed      = 0.1;
+    this.id                = id;
+    this.sessionId         = null;
+    this.client            = null;
+    this.arrayCanvas       = null;
+    this.el                = null;
+    this.isRunning         = false;
+    this.isPaused          = false;
+    this.numItems          = 0;
+    this._lastFrame        = null;
+    this._frameCount       = 0;
+    this._speed            = 0.1;
+    this._previewRequestId = 0;   // 非同期プレビューの競合防止カウンタ
   }
 
   // ── DOM 構築 ────────────────────────────────────────────────────
@@ -477,11 +478,12 @@ class ArrayPanel {
     const algo     = algorithms.find(a => a.id === algoId);
     const type     = algo?.meta?.type || "search";
 
-    // misc 型 (階乗・フィボナッチ等) は配列を使わないため空白キャンバスを表示
+    // misc 型: まず暗色で塗り、非同期でサーバーから初期フレームを取得して描画
     if (type === "misc") {
       const ctx = canvas.getContext("2d");
       ctx.fillStyle = "#1a1a2e";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      this._fetchAndDrawPreview();
       return;
     }
 
@@ -492,6 +494,38 @@ class ArrayPanel {
     this._previewCache = new ArrayCanvas(canvas).drawPreview(
       numItems, sorted, forced, null, showTarget, "cells"
     );
+  }
+
+  /** misc アルゴリズムの初期フレームをサーバーから取得してキャンバスに描画する */
+  async _fetchAndDrawPreview() {
+    const numItems  = Number(this.el.querySelector(".sel-size").value) || 16;
+    const algoId    = Number(this.el.querySelector(".sel-algo").value);
+    const requestId = ++this._previewRequestId;
+
+    try {
+      const res = await fetch(`/api/preview?algorithm_id=${algoId}&n=${numItems}`);
+      if (!res.ok) return;
+      const frame = await res.json();
+
+      // 後から来た別のリクエストで上書き済み、または実行開始済みなら無視
+      if (requestId !== this._previewRequestId || this.isRunning) return;
+
+      const wrapper = this.el.querySelector(".canvas-wrapper");
+      const canvas  = this.el.querySelector(".array-canvas");
+      const w = wrapper.clientWidth;
+      const h = wrapper.clientHeight || Math.round(w * 0.55);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+      }
+
+      this._lastFrame = frame;
+      new ArrayCanvas(canvas).draw(frame);
+
+      // テキストオーバーレイ: フレームのテキストを表示（キャンバス描画と重複しないよう非表示）
+      this.el.querySelector(".text-overlay").textContent = "";
+    } catch (_) {
+      // ネットワークエラーなどは無視
+    }
   }
 
   // ── スピード変換 ─────────────────────────────────────────────
