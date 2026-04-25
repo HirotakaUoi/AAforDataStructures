@@ -9,6 +9,7 @@
  *   tape           – 無端テープ
  *   fib_tree       – フィボナッチ再帰木
  *   staircase      – 階段状テキスト (階乗再帰)
+ *   row            – 横並びコンテナ (children を weight 比で水平分割)
  */
 
 "use strict";
@@ -69,9 +70,26 @@ class ArrayCanvas {
           case "fib_tree":      this._drawFibTree(obj, areaY, eachH);      break;
           case "staircase":     this._drawStaircase(obj, areaY, eachH);    break;
           case "linked_list":   this._drawLinkedList(obj, areaY, eachH);   break;
-          case "stack_v":       this._drawStackV(obj, areaY, eachH);       break;
-          case "queue_circ":    this._drawQueueCirc(obj, areaY, eachH);    break;
-          case "bst_tree":    this._drawBstTree(obj, areaY, eachH);    break;
+          case "stack_v":          this._drawStackV(obj, areaY, eachH);          break;
+          case "expr_stack_view":  this._drawExprStackView(obj, areaY, eachH);  break;
+          case "queue_circ":       this._drawQueueCirc(obj, areaY, eachH);      break;
+          case "bst_tree":      this._drawBstTree(obj, areaY, eachH);      break;
+          case "row": {
+            // 子オブジェクトを weight 比で水平分割して描画
+            const children = obj.children || [];
+            const totalCW  = children.reduce((s, c) => s + (c.weight || 1), 0);
+            let childX = 0;
+            for (const child of children) {
+              const childW = this.cw * (child.weight || 1) / totalCW;
+              switch (child.type) {
+                case "stack_v":   this._drawStackV(child, areaY, eachH, childX, childW);  break;
+                case "bst_tree":  this._drawBstTree(child, areaY, eachH, childX, childW); break;
+                default: break;
+              }
+              childX += childW;
+            }
+            break;
+          }
           case "graph_view":  this._drawGraphView(obj, areaY, eachH);  break;
           case "hash_table":  this._drawHashTable(obj, areaY, eachH);  break;
           case "btree_view":  this._drawBtreeView(obj, areaY, eachH);  break;
@@ -1437,28 +1455,29 @@ class ArrayCanvas {
   // ════════════════════════════════════════════════════════════════════
   // stack_v – 縦方向配列スタック（Bottom 固定・上に積む）
   // ════════════════════════════════════════════════════════════════════
-  _drawStackV(obj, areaY, areaH) {
-    const { values = [], top = -1, label = "", highlights = {}, max_size } = obj;
+  _drawStackV(obj, areaY, areaH, areaX = 0, areaW = null) {
+    const { values = [], top = -1, label = "", highlights = {}, max_size, pad_bottom = 0 } = obj;
     const n   = (max_size !== undefined) ? max_size : values.length;
     const ctx = this.ctx;
-    const cw  = this.cw;
+    const cw  = (areaW !== null) ? areaW : this.cw;
+    const ox  = areaX;   // x オフセット
 
-    const PAD_IDX = 26;   // インデックス表示幅（左）
-    const PAD_PTR = 52;   // top ポインタ幅（右）
+    const PAD_IDX = 22;   // インデックス表示幅（左）
+    const PAD_PTR = 46;   // top ポインタ幅（右）
     const PAD_T   = label ? 22 : 8;
-    const PAD_B   = 20;   // BOTTOM ラベル
+    const PAD_B   = 20 + pad_bottom;   // BOTTOM ラベル + 追加余白
 
     const availH  = areaH - PAD_T - PAD_B;
     const cellH   = Math.max(14, Math.min(38, availH / Math.max(n, 1)));
-    const cellW   = Math.max(44, Math.min(110, cw - PAD_IDX - PAD_PTR - 16));
-    const cellX   = PAD_IDX + (cw - PAD_IDX - PAD_PTR - cellW) / 2;
+    const cellW   = Math.max(36, Math.min(90, cw - PAD_IDX - PAD_PTR - 8));
+    const cellX   = ox + PAD_IDX + (cw - PAD_IDX - PAD_PTR - cellW) / 2;
     const bottomY = areaY + areaH - PAD_B;
 
     ctx.save();
 
     if (label) {
       ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
-      ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + 14);
+      ctx.textAlign = "left"; ctx.fillText(label, ox + 4, areaY + 14);
     }
 
     // BOTTOM ライン＋バッジ
@@ -1533,6 +1552,176 @@ class ArrayCanvas {
       ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("TOP", ax2 + bw/2, midY);
       ctx.textBaseline = "alphabetic";
+    }
+
+    ctx.restore();
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // expr_stack_view – 演算木スタック（空セル左＋部分木右＋矢印）
+  // stack: [{tree:{...}, color:"#rrggbb"}, ...] (index 0 = bottom)
+  // ════════════════════════════════════════════════════════════════════
+  _drawExprStackView(obj, areaY, areaH) {
+    const { stack = [], max_size = 3, label = "" } = obj;
+    const n = max_size;
+    const ctx = this.ctx, cw = this.cw;
+
+    // ── レイアウト定数 ──
+    const IDX_W  = 20;                      // インデックスラベル幅
+    const CELL_W = 46;                      // セル幅
+    const CELL_X = IDX_W;                   // セル左端X
+    const ARR_GAP = 8;                      // セル右端 → 木エリア左端 間隔
+    const TREE_X = CELL_X + CELL_W + ARR_GAP; // 木エリア左端X
+    const TREE_W = cw - TREE_X;            // 木エリア幅
+    const PAD_T  = label ? 22 : 8;
+    const PAD_B  = 68;                      // 下部テキストオーバーレイ回避
+    const availH = areaH - PAD_T - PAD_B;
+    const rowH   = Math.max(30, availH / Math.max(n, 1));
+    const botY   = areaY + PAD_T + availH;  // BOTTOM ライン Y
+
+    ctx.save();
+
+    // ラベル
+    if (label) {
+      ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
+      ctx.textAlign = "left"; ctx.fillText(label, 2, areaY + 14);
+    }
+
+    // BOTTOM ライン + バッジ
+    ctx.strokeStyle = "#4499dd"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(CELL_X - 2, botY); ctx.lineTo(CELL_X + CELL_W + 2, botY); ctx.stroke();
+    ctx.font = "bold 9px monospace";
+    const btw = ctx.measureText("BOTTOM").width + 8, bth = 12;
+    ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = "#4499dd";
+    this._rrect(ctx, CELL_X + CELL_W / 2 - btw / 2, botY + 3, btw, bth, 3); ctx.fill(); ctx.restore();
+    ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("BOTTOM", CELL_X + CELL_W / 2, botY + 3 + bth / 2);
+    ctx.textBaseline = "alphabetic";
+
+    // ── 部分木レンダラー（ミニ版） ──
+    // 引数: ルートノード, 描画エリア (chartL,chartT,chartW,chartH)
+    // 戻り値: {x, y, r} = ルートノードの中心座標と半径
+    const drawMiniTree = (root, cL, cT, cW, cH) => {
+      if (!root) return null;
+      const cnt  = nd => nd ? 1 + cnt(nd.left) + cnt(nd.right) : 0;
+      const dep  = nd => nd ? 1 + Math.max(dep(nd.left), dep(nd.right)) : 0;
+      const N = cnt(root), d = dep(root);
+      if (!N || !d) return null;
+      const lH = cH / d;
+      const nR = Math.max(5, Math.min(18, lH * 0.40, cW / (N + 1) * 0.80));
+      const fs = Math.max(6, Math.min(12, nR * 0.80));
+      // 座標割り付け（中順)
+      let ii = 0;
+      const assign = (nd, dep_) => {
+        if (!nd) return;
+        assign(nd.left, dep_ + 1);
+        nd._x = cL + cW * (ii + 0.5) / N;
+        nd._y = cT + lH * (dep_ + 0.5);
+        ii++;
+        assign(nd.right, dep_ + 1);
+      };
+      ii = 0; assign(root, 0);
+      // エッジ
+      const drawE = nd => {
+        if (!nd) return;
+        for (const ch of [nd.left, nd.right]) {
+          if (!ch) continue;
+          ctx.beginPath(); ctx.moveTo(nd._x, nd._y); ctx.lineTo(ch._x, ch._y);
+          ctx.strokeStyle = "#2a3d50"; ctx.lineWidth = 0.8; ctx.stroke();
+          drawE(ch);
+        }
+      };
+      drawE(root);
+      // ノード
+      const drawN = nd => {
+        if (!nd) return;
+        const { _x: x, _y: y, color = "#4472C4", highlight = null } = nd;
+        ctx.beginPath(); ctx.arc(x, y, nR, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill();
+        if (highlight) {
+          ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = highlight;
+          ctx.beginPath(); ctx.arc(x, y, nR, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+          ctx.strokeStyle = highlight; ctx.lineWidth = 2; ctx.stroke();
+        } else {
+          ctx.strokeStyle = "#1e3045"; ctx.lineWidth = 0.8; ctx.stroke();
+        }
+        ctx.fillStyle = "#fff"; ctx.font = `bold ${fs}px monospace`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(String(nd.key), x, y);
+        ctx.textBaseline = "alphabetic";
+        drawN(nd.left); drawN(nd.right);
+      };
+      drawN(root);
+      // ルート座標を返す
+      const leftCnt = cnt(root.left);
+      return { x: cL + cW * (leftCnt + 0.5) / N, y: cT + lH * 0.5, r: nR };
+    };
+
+    // ── 各スロット描画 ──
+    for (let i = 0; i < n; i++) {
+      const item     = i < stack.length ? stack[i] : null;
+      const hl       = item ? item.color : null;
+      const slotTopY = botY - (i + 1) * rowH;
+      const slotMidY = slotTopY + rowH / 2;
+      const cellH    = Math.min(28, rowH * 0.72);
+      const cellTopY = slotTopY + (rowH - cellH) / 2;
+
+      // セル背景
+      ctx.fillStyle = item ? "#1c2a3a" : "#0a0e18";
+      this._rrect(ctx, CELL_X, cellTopY, CELL_W, cellH, 3); ctx.fill();
+      if (hl) {
+        ctx.save(); ctx.globalAlpha = 0.20; ctx.fillStyle = hl;
+        this._rrect(ctx, CELL_X, cellTopY, CELL_W, cellH, 3); ctx.fill(); ctx.restore();
+      }
+      // セル枠
+      ctx.strokeStyle = hl || (item ? "#4472C4" : "#1e2833");
+      ctx.lineWidth   = hl ? 2 : 0.8;
+      this._rrect(ctx, CELL_X + 0.5, cellTopY + 0.5, CELL_W - 1, cellH - 1, 3); ctx.stroke();
+
+      // インデックスラベル（左）
+      ctx.fillStyle = "#3a5570"; ctx.font = "9px monospace";
+      ctx.textAlign = "right"; ctx.textBaseline = "middle";
+      ctx.fillText(String(i), CELL_X - 3, slotMidY);
+
+      // TOP バッジ（最上位スロット）
+      if (item && i === stack.length - 1) {
+        ctx.fillStyle = hl || "#44cc66"; ctx.font = "bold 8px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("TOP", CELL_X + CELL_W / 2, slotMidY);
+      }
+      ctx.textBaseline = "alphabetic";
+
+      // 部分木＋矢印
+      if (item && item.tree) {
+        const tPad = 4;
+        const rootInfo = drawMiniTree(
+          item.tree,
+          TREE_X + tPad, slotTopY + tPad,
+          TREE_W - tPad * 2, rowH - tPad * 2
+        );
+        if (rootInfo) {
+          // ベジェ曲線矢印: セル右端 → ルートノード左端
+          const ax1 = CELL_X + CELL_W + 2, ay1 = slotMidY;
+          const ax2 = rootInfo.x - rootInfo.r - 2, ay2 = rootInfo.y;
+          const arrowColor = hl || "#4488cc";
+          ctx.strokeStyle = arrowColor; ctx.fillStyle = arrowColor; ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(ax1, ay1);
+          ctx.bezierCurveTo(
+            ax1 + (ax2 - ax1) * 0.45, ay1,
+            ax2 - 14, ay2,
+            ax2, ay2
+          );
+          ctx.stroke();
+          // 矢じり
+          const ang = Math.atan2(ay2 - ay1, ax2 - ax1);
+          ctx.beginPath();
+          ctx.moveTo(ax2, ay2);
+          ctx.lineTo(ax2 - 8 * Math.cos(ang - 0.42), ay2 - 8 * Math.sin(ang - 0.42));
+          ctx.lineTo(ax2 - 8 * Math.cos(ang + 0.42), ay2 - 8 * Math.sin(ang + 0.42));
+          ctx.closePath(); ctx.fill();
+        }
+      }
     }
 
     ctx.restore();
@@ -1747,16 +1936,17 @@ class ArrayCanvas {
   // ════════════════════════════════════════════════════════════════════
   // bst_tree – 二分探索木 / 赤黒木
   // ════════════════════════════════════════════════════════════════════
-  _drawBstTree(obj, areaY, areaH) {
+  _drawBstTree(obj, areaY, areaH, areaX = 0, areaW = null) {
     const { root = null, label = "" } = obj;
     if (!root) return;
 
     const ctx = this.ctx;
-    const cw  = this.cw;
+    const cw  = (areaW !== null) ? areaW : this.cw;
+    const ox  = areaX;
 
-    const PAD    = 16;
-    const chartL = PAD;
-    const chartR = cw - PAD;
+    const PAD    = 12;
+    const chartL = ox + PAD;
+    const chartR = ox + cw - PAD;
     const chartT = areaY + PAD + (label ? 14 : 4);
     const chartB = areaY + areaH - PAD;
     const chartW = chartR - chartL;
@@ -1796,7 +1986,7 @@ class ArrayCanvas {
 
     if (label) {
       ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
-      ctx.textAlign = "left"; ctx.fillText(label, PAD, areaY + 14);
+      ctx.textAlign = "left"; ctx.fillText(label, ox + PAD, areaY + 14);
     }
 
     // Draw edges

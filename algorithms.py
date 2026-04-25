@@ -55,13 +55,14 @@ def _ll(id, nodes, label="", hl=None, is_doubly=False, is_vertical=False,
     if ptr_colors: obj["ptr_colors"] = ptr_colors
     return obj
 
-def _stack_v(id, values, top, max_size, label="", hl=None, weight=1):
+def _stack_v(id, values, top, max_size, label="", hl=None, weight=1, pad_bottom=0):
     return {
         "id": id, "type": "stack_v",
         "values": list(values), "top": int(top), "max_size": int(max_size),
         "label": label,
         "highlights": {str(k): v for k, v in (hl or {}).items()},
         "weight": weight,
+        "pad_bottom": pad_bottom,
     }
 
 def _queue_circ(id, values, front, back, count, label="", hl=None, weight=1):
@@ -1805,91 +1806,150 @@ def _postorder_nodes(node):
 
 
 def expression_tree(n, **kwargs):
-    """Ch.7: 演算木の構築 (RPN → スタック → 二分木) (Sample7_3)"""
-    # データ数に応じてプリセット式を選択
+    """Ch.7: 演算木の構築 (RPN → スタック → 二分木) (Sample7_3)
+    スタックアルゴリズムをそのままシミュレートし、ノードを逐次生成して木を組み上げる。
+    """
+    # データサイズ n に応じて式の複雑さを変える
+    # DataSizeList = [8, 12, 16, 20, 24, 32, ...]
+    # level: n=8→0, n=12→1, n=16→2, n=20→3, n=24→4, n=32+→5
     PRESETS = [
-        (["2", "3", "+"],                                "2 + 3",              3),
-        (["4", "2", "-", "3", "*"],                      "(4-2) × 3",          5),
-        (["2", "3", "+", "8", "1", "-", "*"],            "(2+3) × (8-1)",      7),
-        (["5", "1", "-", "4", "2", "+", "*", "3", "/"],  "((5-1)×(4+2)) ÷ 3", 9),
+        # (RPNトークン列,                                          表示式,                            トークン数)
+        (["2", "3", "+"],
+         "2 + 3",                                                                    3),  # level 0
+        (["4", "2", "-", "3", "*"],
+         "(4-2) × 3",                                                                5),  # level 1
+        (["2", "3", "+", "8", "1", "-", "*"],
+         "(2+3) × (8-1)",                                                            7),  # level 2
+        (["5", "1", "-", "4", "2", "+", "*", "3", "/"],
+         "((5-1) × (4+2)) ÷ 3",                                                     9),  # level 3
+        (["3", "2", "+", "8", "1", "-", "*", "4", "3", "*", "-"],
+         "(3+2) × (8-1) - 4×3",                                                    11),  # level 4
+        (["5", "3", "+", "7", "2", "-", "*", "4", "1", "+", "2", "*", "-"],
+         "(5+3) × (7-2) - (4+1) × 2",                                             13),  # level 5
     ]
-    level = max(0, min(int(n) // 6 - 1, len(PRESETS) - 1))
+    level = max(0, min((int(n) - 8) // 4, len(PRESETS) - 1))
     tokens, expr_str, _ = PRESETS[level]
+    OPERATORS = set("+-*/")
 
     base = [
         {"message": f"演算木の構築: {expr_str}", "color": "white"},
         {"message": f"逆ポーランド記法 (RPN): {' '.join(tokens)}", "color": "cyan"},
     ]
 
-    # 完全な演算木を事前構築
-    full_tree = _build_expr_tree(tokens)
-    all_node_ids = set(_all_ids(full_tree))
+    # ── ノード生成ヘルパー ─────────────────────────────────────────────
+    def _clr(nd):
+        """ノード辞書のハイライトを再帰的にクリア（子を新規コピー）"""
+        if nd is None:
+            return None
+        return {**nd, "highlight": None,
+                "left":  _clr(nd.get("left")),
+                "right": _clr(nd.get("right"))}
 
-    # スタック状態 (表示用: リスト of 文字列)
-    OPERATORS = set("+-*/")
-
-    def _tree_to_str(node):
-        if node is None:
+    def _tree_str(nd):
+        """デバッグ用: 木を文字列化"""
+        if nd is None:
             return ""
-        if node["left"] is None and node["right"] is None:
-            return node["key"]
-        return f"({_tree_to_str(node['left'])}{node['key']}{_tree_to_str(node['right'])})"
+        if nd["left"] is None and nd["right"] is None:
+            return nd["key"]
+        return f"({_tree_str(nd['left'])}{nd['key']}{_tree_str(nd['right'])})"
 
-    def _frame(objs, extra_texts, finished=False):
-        return _f(objs, base + extra_texts, finished=finished,
-                  text_position="bottom")
+    def new_leaf(key):
+        return {"key": key, "color": "#4472C4",
+                "highlight": None, "dim": False, "left": None, "right": None}
 
-    # ── 初期フレーム: トークンテープ + 全ノード dim ──
-    token_cells = _c("tokens", tokens, label="RPN トークン", weight=1)
-    tree_snap   = _clone_expr_tree(full_tree, done_ids=set())
-    yield _frame(
-        [token_cells, _bst_obj("tree", tree_snap, label="演算木", weight=2.5)],
-        [{"message": "スタック: []", "color": "lightgreen"}],
-    )
+    def new_internal(key, left, right):
+        """演算子ノードを作成。子サブツリーのハイライトはクリアする"""
+        return {"key": key, "color": "#c05020",
+                "highlight": None, "dim": False,
+                "left": _clr(left), "right": _clr(right)}
 
-    # full_tree の後順リスト = tokens の順序（RPN の性質）
-    postorder_full = _postorder_nodes(full_tree)
+    # スタックの最大深さを事前計算（RPN の性質から）
+    _max_stk = 0
+    _d = 0
+    for _t in tokens:
+        _d = _d - 1 if _t in OPERATORS else _d + 1
+        _max_stk = max(_max_stk, _d)
 
-    sim_stack2 = []
-    done_ids2  = set()
+    # ── フレーム生成 ───────────────────────────────────────────────────
+    # スロットごとの色（bottom=0 から順に割り当て）
+    SLOT_COLORS = ["#4488cc", "#44aa55", "#cc8833", "#aa44cc"]
 
-    for i, (tok, node) in enumerate(zip(tokens, postorder_full)):
-        nid = node["_id"]
-        hl_map = {i: "yellow"}
-        token_cells = _c("tokens", tokens, label="RPN トークン", hl=hl_map, weight=1)
+    def _clear_hl(nd):
+        """ノードのハイライトを再帰的にクリア"""
+        if nd is None:
+            return None
+        return {**nd, "highlight": None,
+                "left":  _clear_hl(nd.get("left")),
+                "right": _clear_hl(nd.get("right"))}
 
-        done_ids2.add(nid)
-        tree_snap = _clone_expr_tree(full_tree, done_ids=done_ids2, active_id=nid)
+    def make_frame(stack, token_idx=None, top_hl=None,
+                   msg="", color="lightgreen", finished=False):
+        # トークンテープ（処理中のトークンをハイライト）
+        tok_hl = {token_idx: "yellow"} if token_idx is not None else {}
+        tok_cells = _c("tokens", tokens, label="RPN トークン", hl=tok_hl, weight=0.4)
 
+        # スタックアイテムリスト（index 0 = bottom, top = last）
+        # 各アイテム: {tree: <ノード辞書>, color: <色>}
+        stack_items = []
+        for i, nd in enumerate(stack):
+            is_top     = (i == len(stack) - 1)
+            item_color = (top_hl if (is_top and top_hl)
+                          else SLOT_COLORS[i % len(SLOT_COLORS)])
+            # ルートのみハイライト、子はクリア済みのはずだが念のため
+            if is_top and top_hl:
+                item_tree = {**_clear_hl(nd), "highlight": top_hl}
+            else:
+                item_tree = _clear_hl(nd)
+            stack_items.append({"tree": item_tree, "color": item_color})
+
+        stack_view = {
+            "type": "expr_stack_view",
+            "id":   "stack_view",
+            "label": "演算スタック (↑ top)",
+            "max_size": _max_stk,
+            "stack": stack_items,
+            "weight": 3.0,
+        }
+
+        return _f([tok_cells, stack_view],
+                  base + [{"message": msg, "color": color}],
+                  finished=finished, text_position="bottom")
+
+    # ── 初期フレーム ─────────────────────────────────────────────────
+    yield make_frame([], msg="スタック初期化  RPN を左から順に処理", color="cyan")
+
+    # ── メインループ: RPN を順に処理してスタックで木を組み上げる ──────
+    stack = []
+    for i, tok in enumerate(tokens):
         if tok in OPERATORS:
-            r = sim_stack2.pop()
-            l = sim_stack2.pop()
-            sim_stack2.append(node)
-            stack_disp = [_tree_to_str(nd) for nd in sim_stack2]
-            msg = f"演算子 '{tok}': 2値をポップ → ノード作成 → プッシュ"
+            right = stack[-1]
+            left  = stack[-2]
+
+            # ① pop 直後のフレーム: 結合対象の2ノードをスタック先頭に示す
+            yield make_frame(stack, token_idx=i, top_hl="orange",
+                             msg=f"'{tok}': left='{left['key']}' と right='{right['key']}' を pop",
+                             color="orange")
+            stack.pop()
+            stack.pop()
+
+            # ② 新ノードを作成して push: 部分木が結合される瞬間
+            new_nd = new_internal(tok, left, right)
+            stack.append(new_nd)
+            yield make_frame(stack, token_idx=i, top_hl="yellow",
+                             msg=f"'{tok}' ノード作成 → push"
+                                 f"  (左='{left['key']}', 右='{right['key']}')",
+                             color="cyan")
         else:
-            sim_stack2.append(node)
-            stack_disp = [_tree_to_str(nd) for nd in sim_stack2]
-            msg = f"オペランド '{tok}' をプッシュ"
+            # オペランド: 葉ノードを作成して push
+            stack.append(new_leaf(tok))
+            yield make_frame(stack, token_idx=i, top_hl="yellow",
+                             msg=f"'{tok}': 葉ノード作成 → push",
+                             color="lightgreen")
 
-        stack_str = "[" + ",  ".join(stack_disp) + "]"
-        yield _frame(
-            [token_cells, _bst_obj("tree", tree_snap, label="演算木", weight=2.5)],
-            [
-                {"message": msg, "color": "yellow"},
-                {"message": f"スタック: {stack_str}", "color": "lightgreen"},
-            ],
-        )
-
-    # ── 完了フレーム ──
-    result_str = _tree_to_str(full_tree)
-    yield _frame(
-        [_c("tokens", tokens, label="RPN トークン", weight=1),
-         _bst_obj("tree", _clone_expr_tree(full_tree, done_ids=all_node_ids),
-                  label="演算木", weight=2.5)],
-        [{"message": f"構築完了  演算木 = {result_str}", "color": "#44aa44"}],
-        finished=True,
-    )
+    # ── 完了フレーム: スタックに演算木が1つ残る ────────────────────
+    yield make_frame(stack, top_hl="#44aa44",
+                     msg=f"演算木 完成!  {expr_str}",
+                     color="#44aa44", finished=True)
 
 
 # ===========================================================================
