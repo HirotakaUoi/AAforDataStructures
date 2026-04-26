@@ -1154,18 +1154,10 @@ def rb_tree_insert(n, **kwargs):
 # ===========================================================================
 
 def _make_random_graph(n, seed=None):
-    """N ノードのランダム連結無向グラフを生成 (円形レイアウト)"""
+    """N ノードのランダム連結無向グラフを生成 (フォースダイレクテッドレイアウト)"""
     import math
     from random import Random
     rng = Random(seed)
-
-    # 円形レイアウト (12時スタート)
-    nodes = []
-    for i in range(n):
-        angle = 2 * math.pi * i / n - math.pi / 2
-        x = round(0.5 + 0.44 * math.cos(angle), 3)
-        y = round(0.5 + 0.44 * math.sin(angle), 3)
-        nodes.append({"id": i, "label": str(i), "x": x, "y": y})
 
     # スパニングツリーで連結性を保証
     perm = list(range(1, n))
@@ -1193,6 +1185,48 @@ def _make_random_graph(n, seed=None):
                 adj[u].append(v)
                 adj[v].append(u)
                 break
+
+    # Fruchterman-Reingold フォースダイレクテッドレイアウト
+    pos = [[rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)] for _ in range(n)]
+    k = math.sqrt(0.6 / max(n, 1))  # 自然長
+
+    for iteration in range(300):
+        t = 0.12 * (1.0 - iteration / 300)  # 温度（冷却）
+        disp = [[0.0, 0.0] for _ in range(n)]
+
+        # 反発力（全ノード対）
+        for i in range(n):
+            for j in range(i + 1, n):
+                dx = pos[i][0] - pos[j][0]
+                dy = pos[i][1] - pos[j][1]
+                dist = math.sqrt(dx * dx + dy * dy) + 1e-6
+                f = k * k / dist
+                disp[i][0] += dx / dist * f
+                disp[i][1] += dy / dist * f
+                disp[j][0] -= dx / dist * f
+                disp[j][1] -= dy / dist * f
+
+        # 引力（辺で結ばれたノード対）
+        for u, v in edges:
+            dx = pos[u][0] - pos[v][0]
+            dy = pos[u][1] - pos[v][1]
+            dist = math.sqrt(dx * dx + dy * dy) + 1e-6
+            f = dist * dist / k
+            disp[u][0] -= dx / dist * f
+            disp[u][1] -= dy / dist * f
+            disp[v][0] += dx / dist * f
+            disp[v][1] += dy / dist * f
+
+        # 変位を適用（温度でクランプ）
+        for i in range(n):
+            d = math.sqrt(disp[i][0] ** 2 + disp[i][1] ** 2) + 1e-6
+            scale = min(d, t) / d
+            pos[i][0] = max(0.06, min(0.94, pos[i][0] + disp[i][0] * scale))
+            pos[i][1] = max(0.06, min(0.94, pos[i][1] + disp[i][1] * scale))
+
+    nodes = [{"id": i, "label": str(i),
+              "x": round(pos[i][0], 3),
+              "y": round(pos[i][1], 3)} for i in range(n)]
 
     return nodes, sorted(edges), adj
 
@@ -1227,7 +1261,7 @@ def _graph_frame(node_states, visited_edges, gn_list, ge_list,
 def graph_dfs(n, **kwargs):
     """Ch.11: 深さ優先探索 (DFS)"""
     N = max(4, min(int(n), 24))
-    gn_list, ge_list, adj = _make_random_graph(N)
+    gn_list, ge_list, adj = _make_random_graph(N, seed=kwargs.get("seed", N))
 
     base    = [{"message": f"深さ優先探索 (DFS)  N={N}  (Ch.11)", "color": "white"}]
     start   = 0
@@ -1272,7 +1306,7 @@ def graph_bfs(n, **kwargs):
     """Ch.11: 幅優先探索 (BFS)"""
     from collections import deque
     N = max(4, min(int(n), 24))
-    gn_list, ge_list, adj = _make_random_graph(N)
+    gn_list, ge_list, adj = _make_random_graph(N, seed=kwargs.get("seed", N))
 
     base    = [{"message": f"幅優先探索 (BFS)  N={N}  (Ch.11)", "color": "white"}]
     start   = 0

@@ -47,16 +47,17 @@ class StartParams(BaseModel):
     target:         Optional[int] = None        # 探索対象 (search 用)
     data:           Optional[list[int]] = None  # 初期データ (search / sort 共用)
     data_condition: int   = 0         # 0=ランダム 1=昇順 2=降順 3=ほぼ昇順 (sort 用)
+    seed:           Optional[int] = None        # 乱数シード (graph 等)
 
 
 @app.get("/api/preview")
-def get_preview(algorithm_id: int, n: int = 16):
+def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None):
     """ジェネレータの第1フレームだけ返す（実行前プレビュー用）"""
     if algorithm_id not in range(len(AlgorithmList)):
         return JSONResponse({"error": "invalid algorithm_id"}, status_code=400)
     algo_name, algo_fn, algo_meta = AlgorithmList[algorithm_id]
     try:
-        gen = algo_fn(n)
+        gen = algo_fn(n, seed=seed)
         frame = next(gen)
         return frame
     except StopIteration:
@@ -74,8 +75,7 @@ def start_session(params: StartParams):
     algo_type = algo_meta.get("type", "search")
 
     if algo_type == "misc":
-        # misc: num_items だけ渡す (factorial/fibonacci は内部で cap)
-        generator = algo_fn(params.num_items)
+        generator = algo_fn(params.num_items, seed=params.seed)
     elif algo_type == "sort":
         # sort: data_condition と data を渡す (target は不要)
         generator = algo_fn(

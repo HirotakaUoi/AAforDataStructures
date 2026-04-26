@@ -1,4 +1,4 @@
-# ArrayAnimation – 開発ガイド
+# AAforDataStructures – 開発ガイド
 
 ## アーキテクチャ概要
 
@@ -26,8 +26,6 @@
 }
 ```
 
-`text_position="bottom"` は、上部にオブジェクトが密集していてテキストと重なる場合に使う（例: radix_sort の Digit Queues）。
-
 テキスト要素:
 ```python
 {"message": "説明文", "color": "white" | "red" | "lightgreen" | "cyan" | ...}
@@ -37,59 +35,70 @@
 
 ## オブジェクト種別とヘルパー関数
 
-### `array1d_cells` — 正方形セル配列（主力）
+### `array1d_cells` — 正方形セル配列
 ```python
 _c(id, values, label="", hl=None, fills=None, ptr=None,
-   watchman=None, target=None, weight=1)
+   watchman=None, target=None, weight=1, unused_from=None)
 ```
 - `hl`: `{インデックス: "色"}` で個別ハイライト
-- `target`: 探索ターゲット値（一致セルを赤枠表示）
-- `weight`: 縦方向スペース比率
+- `ptr`: `_ptr(index, label, color)` で生成したポインタオブジェクト
+- `unused_from`: このインデックス以降のセルをグレーアウト（配列スタックの未使用領域表示用）
 
-### `array1d` — 棒グラフ（後方互換）
-```python
-_a(id, values, label="", hl=None, ..., log_scale=False)
-```
-- `log_scale=True`: 値の差が大きい場合に対数スケール表示
-
-### `heap_tree` — ヒープ二分木
-```python
-_heap_tree(id, values, heap_size, hl=None, label="", weight=2.5, confirmed_min=0)
-```
-- **`confirmed_min`**: このインデックス未満のノードを「ゴースト」（極暗色）表示する
-  - ヒープ構築中の「まだ処理していないノード」を視覚的に隠す仕組み
-  - 葉ノード開始位置 = `N // 2`、そこから sift_down のたびに 1 減らす
-  - 構築完了後は `confirmed_min=0`（全ノード通常表示）
-
-### `bucket_rows` — バケツ行 / Digit Queues
-```python
-_bucket_rows(id, buckets, bucket_colors, label="",
-             bucket_labels=None, active_bucket=None, weight=3)
-```
-- `active_bucket`: 現在アクティブなバケツインデックス（強調表示）
-- 複数オブジェクトと組み合わせる場合は `weight` で縦比率を調整
-
-### `tape` — 無端テープ（マージソート3テープ用）
+### `tape` — 無端テープ（イテレータ走査用）
 ```python
 _tape(id, cells, head, label="", color="#4472C4", weight=1)
 ```
 
-### `fib_tree` — フィボナッチ再帰木 / スライディングウィンドウ木
-再帰木と反復型（スライディングウィンドウ）の両方で使用。
-ノード辞書を直接構築する（専用ヘルパーなし）:
+### `linked_list` — 矢印接続ノード列
 ```python
-{
-  "n": k, "value": v, "color": "#44aa44",
-  "left": {...} | None, "right": {...} | None,
-  "memo": bool
-}
+_ll(id, nodes, label="", hl=None, is_doubly=False, is_vertical=False,
+    ptr_labels=None, ptr_colors=None, weight=1)
+```
+- `is_doubly=True`: 双方向リスト（`←→` 矢印）
+- `ptr_labels`: ノード列の先頭・末尾ポインタラベル（例: `["first", "last"]`）
+
+### `stack_v` — 縦方向配列スタック
+```python
+_stack_v(id, values, top, max_size, label="", hl=None, weight=1, pad_bottom=0)
+```
+- `top`: 現在のスタックトップインデックス（-1 = 空）
+
+### `queue_circ` — 循環キュー
+```python
+_queue_circ(id, values, front, back, count, label="", hl=None, weight=1)
 ```
 
-### `staircase` — 階段状テキスト（階乗再帰用）
+### `bst_tree` — 二分探索木 / 赤黒木 / 二分木汎用
 ```python
-_staircase(id, rows, label="")
-# rows: [{"depth": int, "text": str, "color": str}, ...]
+_bst_obj(id, node_dict, hl_map=None, label="", weight=1)
 ```
+- ノードdict: `{"key": k, "color": "#4472C4", "left": ..., "right": ...}`
+- 赤黒木ノードは `"color"` が `"red"` / `"black"` / `"#2a1a1a"`（nil ノード）
+
+### `btree_view` — B木
+```python
+_bt_obj(id, root, hl_map=None, t=2, label="", weight=1)
+```
+- `t`: B木の最小次数（デフォルト 2 = 2-3-4木）
+
+### `graph_view` — グラフ（無向）
+```python
+# _graph_frame() 内で直接構築
+{"id": "graph", "type": "graph_view",
+ "nodes": [...], "edges": [...], "label": "Graph", "weight": 1}
+```
+- node: `{"id": i, "color": "#4472C4", "highlight": None | color, ...}`
+- edge: `{"from": u, "to": v, "directed": False, "highlight": bool}`
+- ノード座標は `_make_random_graph(N, seed=...)` が **Fruchterman-Reingold** で計算（円形配置ではない）
+- `seed` は `/api/preview` と `/api/start` の両方からフロントエンドが渡す → プレビューと実行で同じグラフ、リセットごとに新しいグラフ
+
+### `hash_table` — ハッシュ表
+```python
+_hash_obj(id, slots, m, label="", active=-1, weight=1)
+# slot: _hash_slot(key=None, hl=None, chain=[])
+```
+- `active`: 現在操作中のスロットインデックス（強調表示）
+- `chain`: チェイン法では各スロットの連鎖値リスト
 
 ---
 
@@ -97,98 +106,79 @@ _staircase(id, rows, label="")
 
 複数オブジェクトを同一フレームに入れるとき、縦スペースを比率で分配する:
 ```python
-# データ(1) + ヒープ木(2.5) → 木が縦の 2.5/3.5 を占有
 [
   _c("data", ..., weight=1),
-  _heap_tree("tree", ..., weight=2.5),
+  _ll("list", ..., weight=2),
 ]
 ```
-単独オブジェクトの場合は `weight` は実質無効。
 
 ---
 
 ## アルゴリズム追加手順
 
-1. `algorithms.py` に **ジェネレータ関数**を実装
-   - シグネチャ: `def my_algo(n, **kwargs)` (sort/misc) または `def my_algo(n, target=None, data=None)` (search)
+1. `algorithms.py` にジェネレータ関数を実装
+   - シグネチャ: `def my_algo(n, **kwargs)`
+   - 全アルゴリズムが `"misc"` タイプ（target 入力・data_condition 非表示）
    - 最低 1 フレーム yield すること（`finished=True` のフレームで終了）
 
 2. `AlgorithmList` に登録（ファイル末尾）:
    ```python
-   ("表示名", my_algo, {"type": "search" | "sort" | "misc"}),
+   ("表示名  (Ch.X)", my_algo, {"type": "misc"}),
    ```
-   - `type` によってフロントエンドの UI が変わる:
-     - `search`: target 入力を表示、data_condition を非表示
-     - `sort`: target を非表示、data_condition を表示
-     - `misc`: 両方非表示
 
-3. `_make_sort_data()` を使うと `data_condition`（ランダム/昇順/降順/ほぼ昇順）に対応できる
-
-4. **1操作 = 1 `yield`** を原則とする。複数セルをまとめて1フレームにすると動きが見えなくなる。
+3. **1操作 = 1 `yield`** を原則とする
 
 ---
 
-## アニメーション設計パターン
+## ハイライト配色の慣例
 
-### ハイライト配色の慣例
 | 状況 | 色 |
 |---|---|
-| 比較中 / 注目中 | `"yellow"` |
-| 確定済み（ソート完了） | `"#44aa44"` |
-| 発見（探索成功） | `"#ff4444"` / `"red"` |
-| コピー先 | `"#88ff88"` |
-| バケツ対応色 | `COLORS` リスト参照 |
-
-### 進行中テキストの構造
-```python
-base = [{"message": f"N = {N}", "color": "white"}]
-# ... 各ステップで base + [{"message": "ステップ説明", "color": "lightgreen"}]
-```
-
-### 完了フレームの書き方
-```python
-yield _f([...objects...], base + [...], finished=True)
-```
-`found=True` / `found=False` は探索アルゴリズムのみ使用。
+| 注目中 / 操作対象 | `"yellow"` |
+| 挿入・確定済み | `"#44aa44"` |
+| 削除・ポップ | `"#ff4444"` / `"orange"` |
+| 探索経路 / 比較中 | `"#ffcc44"` |
+| キュー待機中 | `"#ff8844"` |
 
 ---
 
 ## 開発サーバー
 
 ```bash
-# 起動（既存プロセスを先に終了）
-lsof -ti :8005 | xargs kill -9 2>/dev/null; uvicorn main:app --port 8005
+cd AAforDataStructures && python -m uvicorn main:app --port 8006
 ```
 
-- ポート: **8005**
-- `.claude/launch.json` に設定済み（`preview_start` ツール用）
-- 静的ファイルのキャッシュ対策: `index.html` の `?v=N` クエリを更新する
+- ポート: **8006**
+
+---
+
+## 実装済みアルゴリズム（21本）
+
+| チャプター | アルゴリズム |
+|---|---|
+| Ch.3 | vector capacity (2倍拡張), vector capacity (固定+16拡張), vector 操作, イテレータ・3要素合計 |
+| Ch.4 | 片方向連結リスト, イテレータ・4要素平均, 双方向連結リスト |
+| Ch.5 | 連結リストスタック, 連結リストキュー, 配列スタック, 循環キュー, RPN 変換・評価 |
+| Ch.6 | BST 挿入・探索・削除 |
+| Ch.7 | 二分木の走査 BFS/DFS, 演算木の構築 |
+| Ch.8 | 赤黒木 挿入, B木 挿入 |
+| Ch.10 | ハッシュ表 開番地法, ハッシュ表 チェイン法 |
+| Ch.11 | 深さ優先探索 DFS, 幅優先探索 BFS |
 
 ---
 
 ## ファイル構成
 
 ```
-ArrayAnimation/
+AAforDataStructures/
 ├── main.py              FastAPI + WebSocket サーバー
 ├── algorithms.py        全アルゴリズム（ジェネレータ）+ AlgorithmList
-├── static/
-│   ├── index.html       UI シェル
-│   ├── css/style.css
-│   └── js/
-│       ├── app.js       マルチパネル UI（パネル管理・API通信）
-│       ├── array_canvas.js  Canvas 描画エンジン（ArrayCanvas クラス）
-│       └── ws_client.js     WebSocket クライアント
-└── .claude/
-    └── launch.json      preview_start 用サーバー設定
+├── requirements.txt
+└── static/
+    ├── index.html
+    ├── css/style.css
+    └── js/
+        ├── app.js           パネル管理・メインアプリ
+        ├── array_canvas.js  Canvas 描画エンジン
+        └── ws_client.js     WebSocket クライアント
 ```
-
----
-
-## 現在実装済みのアルゴリズム（16本）
-
-| カテゴリ | アルゴリズム |
-|---|---|
-| 探索 | 線形探索(基本), 線形探索(番兵法), 線形探索(整列済み), 二分探索(反復), 二分探索(再帰) |
-| ソート | マージソート(反復), マージソート(再帰), マージソート(3テープ), ヒープソート, バケツソート, 基数ソート(LSD) |
-| その他 | 階乗(反復), 階乗(再帰), フィボナッチ(反復), フィボナッチ(再帰), フィボナッチ(メモ化) |

@@ -209,6 +209,7 @@ class ArrayPanel {
     this._frameCount       = 0;
     this._speed            = 0.1;
     this._previewRequestId = 0;   // 非同期プレビューの競合防止カウンタ
+    this._seed             = 0;   // グラフ等の乱数シード（プレビューと開始で共有）
   }
 
   // ── DOM 構築 ────────────────────────────────────────────────────
@@ -502,8 +503,9 @@ class ArrayPanel {
     const algoId    = Number(this.el.querySelector(".sel-algo").value);
     const requestId = ++this._previewRequestId;
 
+    this._seed = Math.floor(Math.random() * 1e9);
     try {
-      const res = await fetch(`/api/preview?algorithm_id=${algoId}&n=${numItems}`);
+      const res = await fetch(`/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`);
       if (!res.ok) return;
       const frame = await res.json();
 
@@ -553,7 +555,7 @@ class ArrayPanel {
 
     let info;
     try {
-      const body = { algorithm_id: algoId, num_items: numItems, speed };
+      const body = { algorithm_id: algoId, num_items: numItems, speed, seed: this._seed };
 
       if (type === "search") {
         const tRaw = this.el.querySelector(".inp-target").value.trim();

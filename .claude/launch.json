@@ -3,10 +3,8 @@
   "configurations": [
     {
       "name": "AAforDataStructures",
-      "runtimeExecutable": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+      "runtimeExecutable": "/Users/Shared/Dropbox/MyProjects/Claude/AA by Python for CC/AAforDataStructures/.venv/bin/uvicorn",
       "runtimeArgs": [
-        "-m",
-        "uvicorn",
         "main:app",
         "--port",
         "8006"
