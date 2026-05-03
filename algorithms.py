@@ -7,6 +7,7 @@ algorithms.py – AAforDataStructures
   linked_list    – 矢印接続ノード列
 """
 
+import random
 from random import randint
 
 # ---------------------------------------------------------------------------
@@ -116,7 +117,7 @@ def vector_capacity(n, scheme="double", **kwargs):
         return _c("vec", display,
                   f"vector  size={size},  capacity={capacity}",
                   hl=hl,
-                  unused_from=size if capacity > size else None)
+                  unused_from=size)
 
     base = [{"message":
              f"vector capacity – {SCHEME_LABEL}  push_back × {N}  (Sample3_1)",
@@ -333,40 +334,66 @@ def vector_ops(n, **kwargs):
 def iterator_sum3(n, **kwargs):
     """Sample3_3: イテレータで 3 要素ずつの合計を計算"""
     N = max(6, min(int(n), 30))
-    data = [randint(1, 99) for _ in range(N)]
+    rng = random.Random(kwargs.get("seed"))
+    data = [rng.randint(1, 99) for _ in range(N)]
     base = [{"message": f"イテレータ: 3 要素ずつの合計  N={N}  (Sample3_3)", "color": "white"}]
 
     output = []
     i = 0
 
-    yield _f([_tape("input", data, 0, "Input"),
-              _c("output", [0], "Output (空)", hl={0: "#1a1a2a"})], base)
+    def out_c(out_hl=None):
+        """確定済み output の _c オブジェクト。空の場合はプレースホルダ(斜線セル)を表示。"""
+        if not output:
+            return _c("output", [0], "Output (空)", unused_from=0, weight=1.0)
+        return _c("output", list(output), f"Output  ({len(output)} 要素)",
+                  hl=out_hl, weight=1.0)
+
+    def sum_c(val, hl_color=None):
+        """sum 専用セル。hl_color=None のとき非活性（ハイライトなし）。"""
+        return _c("sum_cell", [val], "sum",
+                  hl={0: hl_color} if hl_color else None, weight=0.5)
+
+    def mk(head, sum_val, sum_hl=None, out_hl=None, extra=None, finished=False):
+        return _f([
+            _tape("input", data, head, "Input", weight=1.5),
+            sum_c(sum_val, sum_hl),
+            out_c(out_hl),
+        ], base + (extra or []), finished=finished)
+
+    # 初期フレーム
+    yield mk(0, 0)
 
     while i < N:
         grp = [i + k for k in range(3) if i + k < N]
 
-        # テープを 3 要素ぶん 1 つずつスキャン
+        # テープを 1 要素ずつスキャンしながら sum セルに部分和を表示
+        partial = 0
         for step, idx in enumerate(grp):
-            yield _f([_tape("input", data, idx, "Input"),
-                      _c("output", list(output) + [0], f"Output  ({len(output)} 要素)",
-                         hl={len(output): "#334455"})],
-                     base + [{"message": f"it → data[{idx}] = {data[idx]}  ({step+1}/3)",
-                               "color": "lightgreen"}])
+            partial += data[idx]
+            yield mk(idx, partial, sum_hl="yellow",
+                     extra=[{"message": f"it → data[{idx}] = {data[idx]}  ({step+1}/{len(grp)})  sum = {partial}",
+                              "color": "lightgreen"}])
 
-        s = sum(data[j] for j in grp)
+        s = partial
         output.append(s)
 
-        yield _f([_tape("input", data, grp[-1], "Input"),
-                  _c("output", list(output), f"Output  ({len(output)} 要素)",
-                     hl={len(output) - 1: "#ffff44"})],
-                 base + [{"message": f"sum = {' + '.join(str(data[j]) for j in grp)} = {s}",
-                          "color": "cyan"}])
+        # グループ完了: sum セルをシアンで強調、output の末尾を黄色で確定表示
+        yield mk(grp[-1], s, sum_hl="cyan",
+                 out_hl={len(output) - 1: "#ffff44"},
+                 extra=[{"message": f"sum = {' + '.join(str(data[j]) for j in grp)} = {s}",
+                         "color": "cyan"}])
+
+        # sum セルをリセット（次のグループへ）
+        if i + len(grp) < N:
+            yield mk(grp[-1], 0,
+                     out_hl={len(output) - 1: "#44aa44"},
+                     extra=[{"message": f"{len(output)} 個の合計を計算済み", "color": "#44aa44"}])
+
         i += len(grp)
 
-    yield _f([_tape("input", data, N - 1, "Input"),
-              _c("output", output, f"Output  ({len(output)} 要素)")],
-             base + [{"message": f"完了: {len(output)} 個の合計を計算", "color": "#44aa44"}],
-             finished=True)
+    # 完了フレーム
+    yield mk(N - 1, s, sum_hl="#44aa44", finished=True,
+             extra=[{"message": f"完了: {len(output)} 個の合計を計算", "color": "#44aa44"}])
 
 
 # ===========================================================================
@@ -452,23 +479,41 @@ def singly_linked_list(n, **kwargs):
 def singly_linked_list_avg4(n, **kwargs):
     """Sample4_7: 片方向連結リスト + イテレータで 4 要素ずつの平均を計算"""
     N = max(4, min(int(n), 32))
-    data = [randint(1, 99) for _ in range(N)]
+    rng = random.Random(kwargs.get("seed"))
+    data = [rng.randint(1, 99) for _ in range(N)]
     base = [{"message": f"イテレータ: 4 要素ずつの平均  N={N}  (Sample4_7)", "color": "white"}]
 
     vals   = list(data)   # linked list の内容
     output = []           # 計算済み平均値
 
-    def out_obj():
+    def out_obj(out_hl=None):
         if not output:
-            return _c("out", [0], "Output (空)", hl={0: "#1a1a2a"}, weight=0.7)
+            return _c("out", [0], "Output (空)", unused_from=0, weight=0.7)
         return _c("out", list(output), f"Output  ({len(output)} 要素)",
-                  hl={len(output) - 1: "#ffff44"}, weight=0.7)
+                  hl=out_hl, weight=0.7)
 
-    def frame(hl=None, msg="", color="lightgreen", finished=False):
+    def vars_obj(sum_val, count_val, sum_hl=None, count_hl=None):
+        """sum と count を 2 セルで並べて表示"""
+        hl = {}
+        if sum_hl:   hl[0] = sum_hl
+        if count_hl: hl[1] = count_hl
+        return _c("vars_cell", [sum_val, count_val], "sum  /  count",
+                  hl=hl or None, weight=0.45)
+
+    def frame(hl=None, msg="", color="lightgreen", finished=False,
+              sum_val=0, count_val=0, sum_hl=None, count_hl=None,
+              avg_mode=False, avg_val=0, out_hl=None):
+        if avg_mode:
+            # グループ確定時: sum セルを avg 単体セルに差し替え
+            var_c = _c("vars_cell", [avg_val], "avg",
+                       hl={0: "cyan"}, weight=0.45)
+        else:
+            var_c = vars_obj(sum_val, count_val, sum_hl, count_hl)
         return _f(
             [_ll("list", list(vals), f"Singly Linked List  (N={N})",
                  hl=hl or {}, is_doubly=False, weight=1.4),
-             out_obj()],
+             var_c,
+             out_obj(out_hl)],
             base + [{"message": msg, "color": color}],
             finished=finished, text_position="bottom")
 
@@ -482,31 +527,42 @@ def singly_linked_list_avg4(n, **kwargs):
         scanned  = []
         run_sum  = 0
 
-        # グループ内を 1 ノードずつイテレータで走査
+        # グループ内を 1 ノードずつイテレータで走査（sum・count セルをリアルタイム更新）
         for step, idx in enumerate(range(i, grp_end)):
-            hl = {s: "#4488cc" for s in scanned}   # 走査済み: 青
-            hl[idx] = "yellow"                      # 現在ノード: 黄
-            yield frame(
-                hl=hl,
-                msg=f"it → node[{idx}] = {vals[idx]}  ({step + 1}/{grp_size} 要素目)"
-                    + (f"  sum={run_sum}+{vals[idx]}={run_sum + vals[idx]}" if step > 0 else ""),
-                color="lightgreen")
             run_sum += vals[idx]
             scanned.append(idx)
+            hl = {s: "#4488cc" for s in scanned[:-1]}   # 走査済み: 青
+            hl[idx] = "yellow"                           # 現在ノード: 黄
+            yield frame(
+                hl=hl,
+                msg=f"it → node[{idx}] = {vals[idx]}  ({step + 1}/{grp_size} 要素目)  sum = {run_sum}",
+                color="lightgreen",
+                sum_val=run_sum, count_val=step + 1,
+                sum_hl="yellow", count_hl="yellow")
 
         # 平均を計算して output へ追加
         avg = run_sum // grp_size
         output.append(avg)
         sum_str = " + ".join(str(vals[j]) for j in range(i, grp_end))
         hl_done = {j: "#44aa44" for j in range(i, grp_end)}
+        # グループ確定: vars セルを avg 単体に差し替え
         yield frame(
             hl=hl_done,
-            msg=f"平均 = ({sum_str}) / {grp_size} = {run_sum} / {grp_size} = {avg}",
-            color="cyan")
+            msg=f"avg = ({sum_str}) / {grp_size} = {run_sum} / {grp_size} = {avg}",
+            color="cyan",
+            avg_mode=True, avg_val=avg,
+            out_hl={len(output) - 1: "#ffff44"})
+
+        # sum / count セルをリセット（次のグループへ）
+        if grp_end < N:
+            yield frame(
+                msg=f"{len(output)} 個の平均を計算済み", color="#44aa44",
+                out_hl={len(output) - 1: "#44aa44"})
 
         i = grp_end
 
-    yield frame(msg=f"完了: {len(output)} 個の平均を計算", color="#44aa44", finished=True)
+    yield frame(msg=f"完了: {len(output)} 個の平均を計算", color="#44aa44",
+                avg_mode=True, avg_val=avg, finished=True)
 
 
 def doubly_linked_list(n, **kwargs):
@@ -764,89 +820,84 @@ def queue_circular(n, **kwargs):
 
 
 def rpn_eval(n, **kwargs):
-    """Sample5_7: B型単純式 → 逆ポーランド記法変換 + スタック評価"""
-    # B型単純式: *(+(2 3) -(8 1))  → RPN: 2 3 + 8 1 - *  → 結果: 35
-    expr = list("*(+(2 3) -(8 1))")
+    """Sample5_6 + Sample5_2: B型式(中置記法)→ A型式(RPN)変換 + スタック評価"""
+    # B型式(中置記法): (2+3)*(8-1)  → A型式(RPN): 2 3 + 8 1 - *  → 結果: 35
+    expr     = list("(2+3)*(8-1)")
     expr_str = "".join(expr)
-    base = [{"message": f"B型単純式 → RPN  (Sample5_7)  式: {expr_str}", "color": "white"}]
+    base = [{"message": f"B型式(中置) → A型式(RPN)  式: {expr_str}", "color": "white"}]
 
-    oprs = []    # 演算子スタック (char)
-    output = []  # 出力トークンリスト
-    opr = ' '
-
-    PAD = 8  # 表示用パディング幅
+    oprs   = []   # 演算子スタック (Sample5_6: Stack_char oprs)
+    output = []   # RPN 出力トークン
+    opr    = ' '  # 直前の演算子を一時保存 (Sample5_6: char opr = ' ')
 
     def cvt_frame(ci, msg, color="lightgreen"):
-        s_disp = list(oprs) + [' '] * max(0, PAD - len(oprs))
-        s_hl   = {i: "#0e0e1e" for i in range(len(oprs), PAD)}
-        if oprs:
-            s_hl[len(oprs) - 1] = "#ff8844"   # stack top: オレンジ
-        o_disp = list(output) + [' '] * max(0, PAD - len(output))
-        o_hl   = {i: "#ffff44" for i in range(len(output))}
-        o_hl.update({i: "#0e0e1e" for i in range(len(output), PAD)})
+        e_hl = {j: "#4466aa" for j in range(ci)}   # 処理済み: 薄青
+        e_hl[ci] = "#bb66ff"                        # 現在位置: 紫
+        s_hl      = {len(oprs) - 1: "#ff8844"} if oprs else {}
+        o_hl      = {i: "#ffff44" for i in range(len(output))}
+        opr_color = "cyan" if opr != ' ' else "#888888"
         return _f([
-            _tape("expr", expr, ci, "B型式", "#9966cc"),
-            _c("oprs", s_disp, f"演算子スタック ({len(oprs)})", hl=s_hl,
+            _c("expr",    expr,       f"B型式: {expr_str}", hl=e_hl, weight=0.7),
+            _c("opr_var", [opr if opr != ' ' else '空'], "opr (一時保存)",
+               hl={0: opr_color}, weight=0.5),
+            _c("oprs",    list(oprs), f"演算子スタック ({len(oprs)})", hl=s_hl,
                ptr=_ptr(len(oprs) - 1, "top", "#ff8844") if oprs else None),
-            _c("out",  o_disp, f"出力 ({len(output)} トークン)", hl=o_hl),
+            _c("out",     list(output), f"A型式(RPN) 出力 ({len(output)} トークン)", hl=o_hl),
         ], base + [{"message": msg, "color": color}])
 
-    yield cvt_frame(0, "変換開始")
+    yield cvt_frame(0, "変換開始  (Sample5_6)")
 
+    # ── B型式(中置記法) → A型式(RPN) 変換  ≡ Sample5_6.cpp ──
     for ci, c in enumerate(expr):
         if c in '+-*/':
             opr = c
-            yield cvt_frame(ci, f"演算子 '{c}' を一時保存  opr='{opr}'", color="cyan")
+            yield cvt_frame(ci, f"演算子 '{c}' を opr に保存", color="cyan")
         elif c == '(':
             if opr != ' ':
                 oprs.append(opr)
                 opr = ' '
-                yield cvt_frame(ci, f"'(' → opr をスタックに Push: '{oprs[-1]}'", color="#ff8844")
+                yield cvt_frame(ci, f"'(' → opr '{oprs[-1]}' をスタックに Push", color="#ff8844")
             else:
-                yield cvt_frame(ci, "'(' スキップ (opr なし)")
+                yield cvt_frame(ci, "'(' スキップ  (opr なし)")
         elif c == ')':
             if oprs:
                 popped = oprs.pop()
                 output.append(popped)
-                yield cvt_frame(ci, f"')' → Pop '{popped}' して出力", color="orange")
+                yield cvt_frame(ci, f"')' → Pop '{popped}' して RPN 出力", color="orange")
         elif c.isdigit():
             output.append(c)
-            yield cvt_frame(ci, f"数字 '{c}' を出力", color="lightgreen")
+            yield cvt_frame(ci, f"数字 '{c}' → RPN 出力", color="lightgreen")
             if opr != ' ':
                 output.append(opr)
                 opr = ' '
-                yield cvt_frame(ci, f"保存演算子 '{output[-1]}' も出力", color="cyan")
+                yield cvt_frame(ci, f"保存演算子 '{output[-1]}' も RPN 出力", color="cyan")
 
     while oprs:
         popped = oprs.pop()
         output.append(popped)
-        yield cvt_frame(len(expr) - 1, f"残り演算子 '{popped}' を出力", color="orange")
+        yield cvt_frame(len(expr) - 1, f"残り演算子 '{popped}' → RPN 出力", color="orange")
 
     rpn_str = " ".join(output)
-    o_disp = list(output) + [' '] * max(0, PAD - len(output))
-    o_hl   = {i: "#44aaff" for i in range(len(output))}
-    o_hl.update({i: "#0e0e1e" for i in range(len(output), PAD)})
-    yield _f([_c("rpn", o_disp, f"RPN: {rpn_str}", hl=o_hl)],
+    o_hl = {i: "#44aaff" for i in range(len(output))}
+    yield _f([_c("rpn", list(output), f"A型式(RPN): {rpn_str}", hl=o_hl)],
              base + [{"message": f"変換完了!  RPN = {rpn_str}", "color": "cyan"}])
 
-    # ── RPN 評価フェーズ ──
-    base2 = [{"message": f"RPN 評価: {rpn_str}", "color": "white"}]
-    nums = []
+    # ── A型式(RPN) 評価フェーズ  ≡ Sample5_2.cpp ──
+    base2 = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_2)", "color": "white"}]
+    nums  = []
 
     def eval_frame(ti, msg, color="lightgreen", finished=False):
-        n_disp = [str(x) for x in nums] + [' '] * max(0, PAD - len(nums))
-        n_hl   = {i: "#0e0e1e" for i in range(len(nums), PAD)}
-        if nums:
-            n_hl[len(nums) - 1] = "#44cc66"   # top: 緑
-        r_disp = list(output) + [' '] * max(0, PAD - len(output))
-        r_hl   = {ti: "#ff8844"} if ti < len(output) else {}
+        r_hl   = {j: "#336699" for j in range(ti)}
+        if ti < len(output): r_hl[ti] = "#ff8844"
+        n_disp = [str(x) for x in nums]
+        n_hl   = {len(nums) - 1: "#44cc66"} if nums else {}
         return _f([
-            _tape("rpn", output, ti, "RPN", "#4499cc"),
+            _c("rpn",  list(output), f"A型式(RPN): {rpn_str}", hl=r_hl, weight=0.7),
             _c("nums", n_disp, f"数値スタック ({len(nums)})", hl=n_hl,
                ptr=_ptr(len(nums) - 1, "top", "#44cc66") if nums else None),
         ], base2 + [{"message": msg, "color": color}], finished=finished)
 
-    yield eval_frame(0, "RPN 評価開始")
+    yield eval_frame(0, "RPN 評価開始  (Sample5_2)")
 
     for ti, tok in enumerate(output):
         if tok in '+-*/':
@@ -855,15 +906,187 @@ def rpn_eval(n, **kwargs):
             res = (a + b if tok == '+' else a - b if tok == '-'
                    else a * b if tok == '*' else a // b)
             nums.append(res)
-            yield eval_frame(ti, f"{a} {tok} {b} = {res}  → Push({res})", color="orange")
+            yield eval_frame(ti, f"Pop {b}, Pop {a}  →  {a} {tok} {b} = {res}  → Push {res}",
+                             color="orange")
         elif tok.isdigit():
             nums.append(int(tok))
-            yield eval_frame(ti, f"数字 '{tok}' → Push({tok})", color="lightgreen")
+            yield eval_frame(ti, f"数字 '{tok}' → Push {tok}", color="lightgreen")
 
     result = nums[0] if nums else '?'
     yield _f([_c("result", [str(result)], f"結果 = {result}", hl={0: "#44cc66"})],
              base2 + [{"message": f"評価完了!  {expr_str} = {result}", "color": "#44aa44"}],
              finished=True)
+
+
+def rpn_eval_array(n, **kwargs):
+    """Sample5_2: A型式(RPN) を配列スタックで評価"""
+    rpn_str = "2 3 + 8 1 - *"
+    tokens  = rpn_str.split()   # ['2','3','+','8','1','-','*']  空白セルなし
+    base    = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_2・配列スタック)", "color": "white"}]
+    nums    = []   # 配列スタック (Python list として模倣)
+
+    def frame(ci, msg, color="lightgreen", finished=False):
+        e_hl  = {j: "#336699" for j in range(ci)}
+        if 0 <= ci < len(tokens):
+            e_hl[ci] = "#ff8844"
+        top   = len(nums) - 1
+        s_vals = [str(x) for x in nums]
+        s_size = max(1, len(nums))
+        s_hl  = {top: "#44cc66"} if nums else {}
+        return _f([
+            _c("rpn",  tokens, f"A型式: {rpn_str}", hl=e_hl, weight=0.7),
+            _stack_v("nums", s_vals, top, s_size,
+                     f"数値スタック (配列)  top={top}", hl=s_hl),
+        ], base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(0, "RPN 評価開始  (Sample5_2: 配列スタック)")
+
+    for ci, tok in enumerate(tokens):
+        if tok in '+-*/':
+            b = nums.pop(); a = nums.pop()
+            res = (a + b if tok == '+' else a - b if tok == '-'
+                   else a * b if tok == '*' else a // b)
+            nums.append(res)
+            yield frame(ci, f"Pop {b}, Pop {a} → {a} {tok} {b} = {res} → Push {res}",
+                        color="orange")
+        elif tok.isdigit():
+            nums.append(int(tok))
+            yield frame(ci, f"数字 '{tok}' → Push {tok}")
+
+    result = nums[0] if nums else '?'
+    yield frame(len(tokens) - 1,
+                f"評価完了!  {rpn_str} = {result}", color="#44aa44", finished=True)
+
+
+def rpn_eval_list(n, **kwargs):
+    """Sample5_5: A型式(RPN) を連結リストスタックで評価"""
+    rpn_str = "2 3 + 8 1 - *"
+    tokens  = rpn_str.split()   # ['2','3','+','8','1','-','*']  空白セルなし
+    base    = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_5・連結リストスタック)", "color": "white"}]
+    nums    = []   # 連結リストスタック (top が先頭)
+
+    def frame(ci, msg, color="lightgreen", finished=False):
+        e_hl = {j: "#336699" for j in range(ci)}
+        if 0 <= ci < len(tokens):
+            e_hl[ci] = "#ff8844"
+        ll_hl = {0: "#44cc66"} if nums else {}   # top (先頭) をハイライト
+        objs = [_c("rpn", tokens, f"A型式: {rpn_str}", hl=e_hl, weight=0.7)]
+        if nums:
+            objs.append(_ll("stack", list(nums), "数値スタック (連結リスト)  top → ",
+                            hl=ll_hl, ptr_labels=["top"], ptr_colors=["#44cc66"]))
+        else:
+            objs.append(_ll("stack", [], "数値スタック (連結リスト)  空"))
+        return _f(objs, base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(0, "RPN 評価開始  (Sample5_5: 連結リストスタック)")
+
+    for ci, tok in enumerate(tokens):
+        if tok in '+-*/':
+            b = nums.pop(0); a = nums.pop(0)
+            res = (a + b if tok == '+' else a - b if tok == '-'
+                   else a * b if tok == '*' else a // b)
+            nums.insert(0, res)   # 先頭に追加 (push)
+            yield frame(ci, f"Pop {b}, Pop {a} → {a} {tok} {b} = {res} → Push {res}",
+                        color="orange")
+        elif tok.isdigit():
+            nums.insert(0, int(tok))   # 先頭に追加 (push)
+            yield frame(ci, f"数字 '{tok}' → Push {tok}")
+
+    result = nums[0] if nums else '?'
+    yield frame(len(tokens) - 1,
+                f"評価完了!  {rpn_str} = {result}", color="#44aa44", finished=True)
+
+
+def rpn_direct_b(n, **kwargs):
+    """Sample5_7_1_2_3: B型式(中置記法)を RPN 変換せずに直接計算
+    入力形式: 各数値を個別にカッコで囲む完全括弧記法
+    例: (((2)+(3))*((8)-(1))) = 35
+    """
+    expr_str = "(((2)+(3))*((8)-(1)))"
+    expr     = list(expr_str)
+    base     = [{"message": f"B型式直接計算: {expr_str}  (Sample5_7_1_2_3)", "color": "white"}]
+
+    oprs   = []   # char スタック (演算子用)
+    nums   = [0]  # int スタック, 初期値 0 を Push
+    opr    = '+'  # 現在保持している演算子 (初期値 '+')
+
+    def do_op(op):
+        val2 = nums.pop(); val1 = nums.pop()
+        res  = (val1 + val2 if op == '+' else val1 - val2 if op == '-'
+                else val1 * val2 if op == '*' else val1 // val2)
+        nums.append(res)
+        return val1, val2, res
+
+    def frame(ci, msg, color="lightgreen", finished=False):
+        e_hl = {j: "#4466aa" for j in range(ci)}
+        if 0 <= ci < len(expr):
+            e_hl[ci] = "#bb66ff"
+        o_top  = len(oprs) - 1
+        n_top  = len(nums) - 1
+        o_hl   = {o_top: "#ff8844"} if oprs else {}
+        n_hl   = {n_top: "#44cc66"} if nums  else {}
+        opr_color = "cyan" if opr != ' ' else "#888888"
+        # 実データのみ渡す (空スロットなし)
+        o_vals = list(oprs)
+        n_vals = [str(x) for x in nums]
+        return _f([
+            _c("expr", expr, f"B型式: {expr_str}", hl=e_hl, weight=0.6),
+            _c("opr_var", [opr if opr != ' ' else '空'], "opr (一時保存演算子)",
+               hl={0: opr_color}, weight=0.5),
+            _stack_v("oprs", o_vals, o_top, max(1, len(oprs)),
+                     f"演算子スタック  top={o_top}", hl=o_hl, weight=1.0),
+            _stack_v("nums", n_vals, n_top, max(1, len(nums)),
+                     f"数値スタック  top={n_top}", hl=n_hl, weight=1.0),
+        ], base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(0, "初期状態: opr='+', numbers=[0]  (= '0+式' として処理開始)")
+
+    N = len(expr)
+    i = 0
+    while i < N:
+        c = expr[i]
+        if c in '+-*/':
+            opr = c
+            yield frame(i, f"演算子 '{c}' を opr に保存", color="cyan")
+        elif c == '(':
+            pushed_opr = opr
+            oprs.append(opr)
+            opr = '+'
+            nums.append(0)
+            yield frame(i,
+                        f"'(' → opr='{pushed_opr}' を oprs に Push  /  nums に 0 Push  /  opr='+' にリセット",
+                        color="#ff8844")
+        elif c == ')':
+            popped = oprs.pop()
+            opr = popped
+            yield frame(i, f"')' → oprs から '{popped}' を Pop  →  opr='{popped}'",
+                        color="#ff8844")
+            v1, v2, res = do_op(opr)
+            opr = ' '
+            yield frame(i, f"do_op('{popped}'):  {v1} {popped} {v2} = {res}  →  opr=' '",
+                        color="orange")
+        elif c.isdigit():
+            num = int(c)
+            while i + 1 < N and expr[i + 1].isdigit():
+                i += 1
+                num = num * 10 + int(expr[i])
+            nums.append(num)
+            yield frame(i, f"数字 '{num}' → nums に Push", color="lightgreen")
+            # 次が ')' または末尾なら即 do_op
+            j = i + 1
+            while j < N and expr[j] == ' ':
+                j += 1
+            if j >= N or expr[j] == ')':
+                cur_opr = opr
+                v1, v2, res = do_op(opr)
+                opr = ' '
+                yield frame(i,
+                            f"次が ')' → do_op('{cur_opr}'):  {v1} {cur_opr} {v2} = {res}  →  opr=' '",
+                            color="orange")
+        i += 1
+
+    result = nums[0] if nums else '?'
+    yield frame(N - 1, f"計算完了!  {expr_str} = {result}", color="#44aa44", finished=True)
 
 
 # ===========================================================================
@@ -991,6 +1214,171 @@ def bst_operations(n, **kwargs):
              base + [{"message": "BST 操作完了", "color": "#44aa44"}],
              finished=True)
 
+
+# ─── AVL木 helpers ────────────────────────────────────────────────────────
+
+class _AVLNode:
+    __slots__ = ('key', 'height', 'left', 'right')
+    def __init__(self, key):
+        self.key    = key
+        self.height = 1
+        self.left   = self.right = None
+
+
+def _avl_h(nd):  return nd.height if nd else 0
+def _avl_bf(nd): return _avl_h(nd.left) - _avl_h(nd.right) if nd else 0
+def _avl_uh(nd): nd.height = 1 + max(_avl_h(nd.left), _avl_h(nd.right))
+
+def _avl_rr(y):  # raw right-rotate（イベント記録なし）
+    x = y.left; y.left = x.right; x.right = y
+    _avl_uh(y); _avl_uh(x); return x
+
+def _avl_rl(x):  # raw left-rotate（イベント記録なし）
+    y = x.right; x.right = y.left; y.left = x
+    _avl_uh(x); _avl_uh(y); return y
+
+
+def _avl_nd_to_dict(nd, hl=None):
+    """_AVLNode → renderer用 dict (deep copy)"""
+    if nd is None: return None
+    return {"key": nd.key, "color": "#4472C4",
+            "highlight": (hl or {}).get(nd.key),
+            "left":  _avl_nd_to_dict(nd.left,  hl),
+            "right": _avl_nd_to_dict(nd.right, hl)}
+
+
+def _avl_apply_hl(d, hl):
+    """dict スナップショットにハイライトを上書き（元 dict を変更しない）"""
+    if d is None: return None
+    return {**d,
+            "highlight": hl.get(d["key"]),
+            "left":  _avl_apply_hl(d.get("left"),  hl),
+            "right": _avl_apply_hl(d.get("right"), hl)}
+
+
+def _avl_obj_from_dict(id_, root_dict, label="", weight=1, rotation=None):
+    obj = {"id": id_, "type": "bst_tree", "root": root_dict,
+           "label": label, "weight": weight}
+    if rotation:
+        obj["rotation"] = rotation
+    return obj
+
+
+class _AVLTree:
+    """AVL木 — 挿入・削除時に回転イベントを収集する。Sample8_2 の C++ 実装に対応"""
+
+    def __init__(self):
+        self.root  = None
+        self._evts = []   # list of (rot_type, bf, pivot_key, snap_before_dict)
+
+    def _snap(self):
+        """現在の木全体を dict スナップショットとして返す（回転前の状態保存用）"""
+        return _avl_nd_to_dict(self.root)
+
+    # ── 挿入 ─────────────────────────────────────────────────────────
+    def _ins(self, nd, key):
+        if nd is None:
+            return _AVLNode(key)
+        if key < nd.key:
+            nd.left  = self._ins(nd.left,  key)
+        elif key > nd.key:
+            nd.right = self._ins(nd.right, key)
+        else:
+            return nd
+
+        _avl_uh(nd)
+        bf = _avl_bf(nd)
+
+        if bf > 1 and key < nd.left.key:        # LL → 右回転
+            sb = self._snap()
+            r  = _avl_rr(nd)
+            self._evts.append(('LL', bf, nd.key, None, sb))
+            return r
+        if bf < -1 and key > nd.right.key:       # RR → 左回転
+            sb = self._snap()
+            r  = _avl_rl(nd)
+            self._evts.append(('RR', bf, nd.key, None, sb))
+            return r
+        if bf > 1 and key > nd.left.key:         # LR → 左右二重回転
+            child_key = nd.left.key
+            sb = self._snap()
+            nd.left = _avl_rl(nd.left)
+            r = _avl_rr(nd)
+            self._evts.append(('LR', bf, nd.key, child_key, sb))
+            return r
+        if bf < -1 and key < nd.right.key:       # RL → 右左二重回転
+            child_key = nd.right.key
+            sb = self._snap()
+            nd.right = _avl_rr(nd.right)
+            r = _avl_rl(nd)
+            self._evts.append(('RL', bf, nd.key, child_key, sb))
+            return r
+        return nd
+
+    def insert(self, key):
+        self._evts = []
+        self.root  = self._ins(self.root, key)
+        return list(self._evts)
+
+    # ── 削除 ─────────────────────────────────────────────────────────
+    def _min(self, nd):
+        while nd.left: nd = nd.left
+        return nd
+
+    def _del(self, nd, key):
+        if nd is None: return None
+        if key < nd.key:
+            nd.left  = self._del(nd.left,  key)
+        elif key > nd.key:
+            nd.right = self._del(nd.right, key)
+        else:
+            if nd.left  is None: return nd.right
+            if nd.right is None: return nd.left
+            s = self._min(nd.right)
+            nd.key   = s.key
+            nd.right = self._del(nd.right, s.key)
+
+        _avl_uh(nd); bf = _avl_bf(nd)
+
+        if bf > 1 and _avl_bf(nd.left) >= 0:
+            sb = self._snap(); r = _avl_rr(nd)
+            self._evts.append(('LL', bf, nd.key, None, sb)); return r
+        if bf > 1 and _avl_bf(nd.left) < 0:
+            child_key = nd.left.key
+            sb = self._snap()
+            nd.left = _avl_rl(nd.left); r = _avl_rr(nd)
+            self._evts.append(('LR', bf, nd.key, child_key, sb)); return r
+        if bf < -1 and _avl_bf(nd.right) <= 0:
+            sb = self._snap(); r = _avl_rl(nd)
+            self._evts.append(('RR', bf, nd.key, None, sb)); return r
+        if bf < -1 and _avl_bf(nd.right) > 0:
+            child_key = nd.right.key
+            sb = self._snap()
+            nd.right = _avl_rr(nd.right); r = _avl_rl(nd)
+            self._evts.append(('RL', bf, nd.key, child_key, sb)); return r
+        return nd
+
+    def delete(self, key):
+        self._evts = []
+        self.root  = self._del(self.root, key)
+        return list(self._evts)
+
+    # ── 探索 ─────────────────────────────────────────────────────────
+    def search(self, key):
+        path, nd = [], self.root
+        while nd:
+            path.append(nd.key)
+            if key == nd.key: break
+            nd = nd.left if key < nd.key else nd.right
+        return path
+
+
+_AVL_ROT_NAMES = {
+    'LL': 'LL → 右回転',
+    'RR': 'RR → 左回転',
+    'LR': 'LR → 左右二重回転',
+    'RL': 'RL → 右左二重回転',
+}
 
 # ─── 赤黒木 helpers ───────────────────────────────────────────────────────
 
@@ -1147,6 +1535,107 @@ def rb_tree_insert(n, **kwargs):
         yield snapshot({v: "#44ff88"}, msg=f"insert({v}) 完了  根は黒", color="lightgreen")
 
     yield snapshot(msg="赤黒木 構築完了  (赤=赤ノード / 青=黒ノード)", color="#44aa44", finished=True)
+
+
+# ===========================================================================
+# Ch.8 (続き): AVL木 – 挿入・探索・削除 (Sample8_2)
+# ===========================================================================
+
+def avl_tree_operations(n, **kwargs):
+    """Ch.8: AVL木の挿入・探索・削除 (Sample8_2 相当)"""
+    import random
+    seed = kwargs.get('seed', 42)
+    rng  = random.Random(seed)
+    N    = max(5, min(int(n), 20))
+    vals = rng.sample(range(1, 200), N)
+
+    base = [{"message": f"AVL木 (AVL Tree)  N={N}  (Ch.8)", "color": "white"}]
+    avl  = _AVLTree()
+
+    def snap(hl=None, msg="", color="white", finished=False):
+        return _f([_avl_obj_from_dict("avl",
+                                      _avl_nd_to_dict(avl.root, hl or {}),
+                                      label="AVL Tree")],
+                  base + [{"message": msg, "color": color}],
+                  finished=finished)
+
+    def snap_from_dict(root_dict, msg="", color="white", rotation=None):
+        return _f([_avl_obj_from_dict("avl", root_dict, label="AVL Tree",
+                                      rotation=rotation)],
+                  base + [{"message": msg, "color": color}])
+
+    # ── 初期フレーム ────────────────────────────────────────────────
+    yield snap(msg=f"AVL木初期化 (空)  {N}個を挿入します", color="lightgreen")
+
+    # ── 挿入フェーズ ────────────────────────────────────────────────
+    for v in vals:
+        path = avl.search(v)
+        if path:
+            yield snap(hl={k: "yellow" for k in path},
+                       msg=f"insert({v}): 挿入位置を探索  path={path}", color="cyan")
+
+        evts = avl.insert(v)
+
+        if not evts:
+            h = avl.root.height if avl.root else 0
+            yield snap(hl={v: "#44ff88"},
+                       msg=f"insert({v}) 完了  回転なし  高さ={h}", color="lightgreen")
+        else:
+            for rot, bf, pivot, child_key, sb in evts:
+                rname = _AVL_ROT_NAMES.get(rot, rot)
+                hl = {pivot: "orange"}
+                if child_key is not None:
+                    hl[child_key] = "#ffaa00"
+                # 回転前スナップショット（pivot をオレンジ + 回転弧オーバーレイ）
+                yield snap_from_dict(
+                    _avl_apply_hl(sb, hl),
+                    msg=f"insert({v}): bf={bf:+d} → {rname}  pivot={pivot}",
+                    color="orange",
+                    rotation={"type": rot, "pivot": pivot, "child": child_key})
+            h = avl.root.height if avl.root else 0
+            yield snap(hl={v: "#44ff88"},
+                       msg=f"insert({v}) 完了  回転あり  高さ={h}", color="lightgreen")
+
+    h = avl.root.height if avl.root else 0
+    yield snap(msg=f"挿入完了  N={N}  木の高さ={h}", color="white")
+
+    # ── 探索フェーズ ────────────────────────────────────────────────
+    not_in = next(x for x in range(1, 200) if x not in set(vals))
+    search_targets = [vals[N // 3], vals[2 * N // 3], not_in]
+    for target in search_targets:
+        path = avl.search(target)
+        found = path and path[-1] == target
+        for step, k in enumerate(path):
+            hl = {k: ("#44ff88" if k == target else "yellow")}
+            yield snap(hl=hl,
+                       msg=f"search({target}): [{step+1}] key={k}  "
+                           f"{'→ 発見!' if k == target else '→ 次へ'}",
+                       color="lightgreen" if k == target else "cyan")
+        if not found:
+            yield snap(msg=f"search({target}): Not Found", color="#ff6655")
+
+    # ── 削除フェーズ ────────────────────────────────────────────────
+    delete_targets = [vals[1], vals[N // 2]]
+    for target in delete_targets:
+        path = avl.search(target)
+        if path and path[-1] == target:
+            yield snap(hl={target: "#ff4444"},
+                       msg=f"delete({target}): ノードを削除します", color="orange")
+            evts = avl.delete(target)
+            for rot, bf, pivot, child_key, sb in evts:
+                rname = _AVL_ROT_NAMES.get(rot, rot)
+                hl = {pivot: "orange"}
+                if child_key is not None:
+                    hl[child_key] = "#ffaa00"
+                yield snap_from_dict(
+                    _avl_apply_hl(sb, hl),
+                    msg=f"delete({target}): bf={bf:+d} → {rname}  pivot={pivot}",
+                    color="orange",
+                    rotation={"type": rot, "pivot": pivot, "child": child_key})
+            h = avl.root.height if avl.root else 0
+            yield snap(msg=f"delete({target}) 完了  高さ={h}", color="lightgreen")
+
+    yield snap(msg="AVL木 操作完了", color="#44aa44", finished=True)
 
 
 # ===========================================================================
@@ -2005,7 +2494,10 @@ AlgorithmList = [
     ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc"}),
     ("配列スタック  (Ch.5)",        stack_array,        {"type": "misc"}),
     ("循環キュー  (Ch.5)",          queue_circular,     {"type": "misc"}),
+    ("RPN 評価・配列スタック  (Ch.5)",  rpn_eval_array,   {"type": "misc"}),
+    ("RPN 評価・連結リストスタック  (Ch.5)", rpn_eval_list, {"type": "misc"}),
     ("RPN 変換・評価  (Ch.5)",      rpn_eval,           {"type": "misc"}),
+    ("B型式 直接計算  (Ch.5)",      rpn_direct_b,       {"type": "misc"}),
     # ── Ch.6: 二分探索木 ──
     ("BST 挿入・探索・削除  (Ch.6)", bst_operations,    {"type": "misc"}),
     # ── Ch.7: 二分木走査 / 演算木 ──
@@ -2013,6 +2505,7 @@ AlgorithmList = [
     ("演算木の構築  (Ch.7)",         expression_tree,   {"type": "misc"}),
     # ── Ch.8: 赤黒木・B木 ──
     ("赤黒木 挿入  (Ch.8)",         rb_tree_insert,     {"type": "misc"}),
+    ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc"}),
     ("B木 挿入  (Ch.8)",            bt_operations,      {"type": "misc"}),
     # ── Ch.11: グラフ ──
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),

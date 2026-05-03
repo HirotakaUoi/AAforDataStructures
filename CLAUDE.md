@@ -74,6 +74,16 @@ _bst_obj(id, node_dict, hl_map=None, label="", weight=1)
 ```
 - ノードdict: `{"key": k, "color": "#4472C4", "left": ..., "right": ...}`
 - 赤黒木ノードは `"color"` が `"red"` / `"black"` / `"#2a1a1a"`（nil ノード）
+- AVL木回転弧: オブジェクトに `rotation` フィールドを付加することで Canvas 上に回転矢印を描画
+  ```python
+  _avl_obj_from_dict(id_, root_dict, label="", weight=1,
+                     rotation={"type": "LR", "pivot": 10, "child": 5})
+  ```
+  - `type`: `"LL"` / `"RR"` / `"LR"` / `"RL"`
+  - `pivot`: 不均衡ノードのキー（常に必須）
+  - `child`: LR/RL のみ必須（先に回転する子ノードのキー）、LL/RR は `null`
+  - LL→pivot に右半円弧（実線）/ RR→pivot に左半円弧（実線）
+  - LR→child に左半円弧＋pivot に右半円弧（破線）/ RL→child に右半円弧＋pivot に左半円弧（破線）
 
 ### `btree_view` — B木
 ```python
@@ -152,7 +162,7 @@ cd AAforDataStructures && python -m uvicorn main:app --port 8006
 
 ---
 
-## 実装済みアルゴリズム（21本）
+## 実装済みアルゴリズム（22本）
 
 | チャプター | アルゴリズム |
 |---|---|
@@ -161,7 +171,7 @@ cd AAforDataStructures && python -m uvicorn main:app --port 8006
 | Ch.5 | 連結リストスタック, 連結リストキュー, 配列スタック, 循環キュー, RPN 変換・評価 |
 | Ch.6 | BST 挿入・探索・削除 |
 | Ch.7 | 二分木の走査 BFS/DFS, 演算木の構築 |
-| Ch.8 | 赤黒木 挿入, B木 挿入 |
+| Ch.8 | 赤黒木 挿入, AVL木 挿入・探索・削除, B木 挿入 |
 | Ch.10 | ハッシュ表 開番地法, ハッシュ表 チェイン法 |
 | Ch.11 | 深さ優先探索 DFS, 幅優先探索 BFS |
 

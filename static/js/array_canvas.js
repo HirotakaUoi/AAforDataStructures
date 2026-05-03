@@ -18,14 +18,50 @@
 // カラーテーマ (canvas 背景・ラベル色のみ; オブジェクト色はフレームデータ側)
 // ---------------------------------------------------------------------------
 const AC_THEMES = {
-  dark:     { canvasBg: "#0d1117",  valueLabelColor: "#ccc",  indexLabelColor: "#4a6080",
-              foundCellBg: "#1a4a1a", foundCellText: "#44cc44" },
-  bright:   { canvasBg: "#f0f4ff",  valueLabelColor: "#334",  indexLabelColor: "#668",
-              foundCellBg: "#b8f0b8", foundCellText: "#005500" },
-  hc:       { canvasBg: "#000000",  valueLabelColor: "#fff",  indexLabelColor: "#888",
-              foundCellBg: "#003300", foundCellText: "#00ff66" },
-  hcbright: { canvasBg: "#ffffff",  valueLabelColor: "#111",  indexLabelColor: "#445",
-              foundCellBg: "#a8eea8", foundCellText: "#003300" },
+  dark: {
+    canvasBg: "#0d1117",  valueLabelColor: "#ccc",  indexLabelColor: "#4a6080",
+    foundCellBg: "#1a4a1a", foundCellText: "#44cc44",
+    cellBg: "#1c2a3a",    cellEmptyBg: "#0a0e18",   nodeBg: "#0d1117",
+    cellText: "#ffffff",  cellValueColor: "#dddddd",
+    edgeColor: "#334455", dimEdge: "#1a2535",       ghostFill: "#0f1820",
+    ghostStroke: "#1c2d3e", ghostText: "#253545",
+    labelColor: "#6a8faf", badgeText: "#0d1117",
+    emptyText: "#445566", textOverlay: "rgba(10,14,26,0.85)",
+    connectorColor: "#2a4060",
+  },
+  bright: {
+    canvasBg: "#f0f4ff",  valueLabelColor: "#334",  indexLabelColor: "#668",
+    foundCellBg: "#b8f0b8", foundCellText: "#005500",
+    cellBg: "#d8e8f8",    cellEmptyBg: "#e4eefa",   nodeBg: "#dce8f4",
+    cellText: "#1a2a3a",  cellValueColor: "#223344",
+    edgeColor: "#6688aa", dimEdge: "#99aabb",       ghostFill: "#dce8f4",
+    ghostStroke: "#aabbcc", ghostText: "#8899aa",
+    labelColor: "#6a8faf", badgeText: "#0d1117",
+    emptyText: "#667788", textOverlay: "rgba(10,20,40,0.88)",
+    connectorColor: "#6688aa",
+  },
+  hc: {
+    canvasBg: "#000000",  valueLabelColor: "#fff",  indexLabelColor: "#888",
+    foundCellBg: "#003300", foundCellText: "#00ff66",
+    cellBg: "#182030",    cellEmptyBg: "#060810",   nodeBg: "#000000",
+    cellText: "#ffffff",  cellValueColor: "#eeeeee",
+    edgeColor: "#557799", dimEdge: "#223344",       ghostFill: "#080c14",
+    ghostStroke: "#223344", ghostText: "#445566",
+    labelColor: "#8899aa", badgeText: "#000000",
+    emptyText: "#556677", textOverlay: "rgba(0,0,0,0.90)",
+    connectorColor: "#446688",
+  },
+  hcbright: {
+    canvasBg: "#ffffff",  valueLabelColor: "#111",  indexLabelColor: "#445",
+    foundCellBg: "#a8eea8", foundCellText: "#003300",
+    cellBg: "#d0e0f0",    cellEmptyBg: "#e4eefa",   nodeBg: "#dce8f4",
+    cellText: "#1a2a3a",  cellValueColor: "#1a2a3a",
+    edgeColor: "#5577aa", dimEdge: "#99aabb",       ghostFill: "#dce8f4",
+    ghostStroke: "#aabbcc", ghostText: "#8899aa",
+    labelColor: "#5577aa", badgeText: "#0d1117",
+    emptyText: "#556677", textOverlay: "rgba(10,20,40,0.88)",
+    connectorColor: "#5577aa",
+  },
 };
 let _acThemeKey = "dark";
 function _acTheme() { return AC_THEMES[_acThemeKey] ?? AC_THEMES.dark; }
@@ -104,7 +140,7 @@ class ArrayCanvas {
       const pad  = 6;
       const boxH = texts.length * TEXT_LINE_H + pad * 2;
       ctx.save();
-      ctx.fillStyle = "rgba(10, 14, 26, 0.85)";
+      ctx.fillStyle = _acTheme().textOverlay;
       if (text_position === "bottom") {
         const boxY = this.ch - boxH;
         ctx.fillRect(0, boxY, this.cw, boxH);
@@ -294,7 +330,8 @@ class ArrayCanvas {
     const ctx = this.ctx;
     const cw  = this.cw;
 
-    const PAD_T = 22; const PAD_B = 16;
+    const hasSize = (unused_from !== null);
+    const PAD_T = 22; const PAD_B = hasSize ? 64 : 16;
     const PAD_L = 8;  const PAD_R = 8;
 
     // target セルを左端に配置
@@ -308,9 +345,10 @@ class ArrayCanvas {
     const chartB = areaY + areaH - PAD_B;
     const chartH = chartB - chartT;
 
-    // セルサイズ: 横幅を n 等分し正方形に近づける
-    const cellW  = Math.max(18, Math.min(56, (chartR - chartL) / n));
-    const cellH  = Math.min(cellW, Math.max(18, chartH * 0.65));
+    // セルサイズ: 全 n 要素が必ず幅に収まるよう cellW を決定（下限なし）
+    const cellW  = Math.min(56, (chartR - chartL) / n);
+    // cellH: 最低 14px を確保（縮小時も帯として視認できるよう）
+    const cellH  = Math.min(Math.max(cellW, 14), chartH * 0.65);
     const totalW = cellW * n;
     const startX = chartL + Math.max(0, ((chartR - chartL) - totalW) / 2);
     const cellY  = chartT + (chartH - cellH) / 2;
@@ -346,66 +384,83 @@ class ArrayCanvas {
     }
 
     // セル描画
+    const compact = cellW < 4;   // 極小セル: ボーダー・テキストなし
     for (let i = 0; i < n; i++) {
-      const cx          = startX + i * cellW;
-      const isWatchman  = (watchman_index === i);
-      const hlColor     = highlights[String(i)];
-      const isUnused    = (unused_from !== null && i >= unused_from);
+      const cx       = startX + i * cellW;
+      const isWatchman = (watchman_index === i);
+      const hlColor    = highlights[String(i)];
+      const isUnused   = (unused_from !== null && i >= unused_from);
+      const fw         = Math.max(cellW, 1);  // fillRect 用の安全な幅
 
-      if (isUnused) {
+      if (compact) {
+        // ── compact モード: 塗りのみ ──────────────────────────────────
+        if (isUnused) {
+          ctx.fillStyle = _acTheme().cellEmptyBg;
+        } else if (hlColor) {
+          ctx.fillStyle = hlColor;
+        } else if (isWatchman) {
+          ctx.fillStyle = "#5a3000";
+        } else {
+          ctx.fillStyle = _acTheme().cellBg;
+        }
+        ctx.fillRect(cx, cellY, fw, cellH);
+
+      } else if (isUnused) {
         // ── 確保済み・未使用スロット ─────────────────────────────────
-        // 背景: 濃いネイビー（通常より暗め）
-        ctx.fillStyle = "#0e1520";
+        ctx.fillStyle = _acTheme().cellEmptyBg;
         ctx.fillRect(cx, cellY, cellW - 1, cellH);
 
-        // ハッチング (斜め縞) で「空き領域」を強調
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(cx, cellY, cellW - 1, cellH);
-        ctx.clip();
-        ctx.strokeStyle = "rgba(80,120,180,0.22)";
-        ctx.lineWidth = 1;
-        const step = Math.max(5, cellW * 0.28);
-        for (let d = -cellH; d < cellW + cellH; d += step) {
+        // ハッチング (斜め縞) — セルが十分大きい場合のみ
+        if (cellW >= 8) {
+          ctx.save();
           ctx.beginPath();
-          ctx.moveTo(cx + d,          cellY);
-          ctx.lineTo(cx + d + cellH,  cellY + cellH);
-          ctx.stroke();
+          ctx.rect(cx, cellY, cellW - 1, cellH);
+          ctx.clip();
+          ctx.strokeStyle = "rgba(80,120,180,0.22)";
+          ctx.lineWidth = 1;
+          const step = Math.max(5, cellW * 0.28);
+          for (let d = -cellH; d < cellW + cellH; d += step) {
+            ctx.beginPath();
+            ctx.moveTo(cx + d,          cellY);
+            ctx.lineTo(cx + d + cellH,  cellY + cellH);
+            ctx.stroke();
+          }
+          ctx.restore();
         }
-        ctx.restore();
 
         // 破線ボーダー
         ctx.save();
         ctx.strokeStyle = "rgba(80,130,200,0.55)";
         ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
+        ctx.setLineDash(cellW >= 6 ? [3, 3] : []);
         ctx.strokeRect(cx + 0.5, cellY + 0.5, cellW - 2, cellH - 1);
         ctx.restore();
 
-        // テキスト: em ダッシュ（値を表示しない）
-        const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
-        ctx.fillStyle    = "rgba(80,130,200,0.60)";
-        ctx.font         = `${fs}px monospace`;
-        ctx.textAlign    = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("–", cx + cellW / 2, cellY + cellH / 2);
-        ctx.textBaseline = "alphabetic";
+        // テキスト: em ダッシュ — セルが十分大きい場合のみ
+        if (cellW >= 10) {
+          const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
+          ctx.fillStyle    = "rgba(80,130,200,0.60)";
+          ctx.font         = `${fs}px monospace`;
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("–", cx + cellW / 2, cellY + cellH / 2);
+          ctx.textBaseline = "alphabetic";
+        }
 
       } else {
         // ── 通常セル ─────────────────────────────────────────────────
-        // 背景
         if (isWatchman) {
           ctx.fillStyle = "#3d2000";
           ctx.fillRect(cx, cellY, cellW - 1, cellH);
         } else if (hlColor) {
-          ctx.fillStyle = "#1c2a3a";
+          ctx.fillStyle = _acTheme().cellBg;
           ctx.fillRect(cx, cellY, cellW - 1, cellH);
-          ctx.save(); ctx.globalAlpha = 0.35;
+          ctx.save(); ctx.globalAlpha = 0.65;
           ctx.fillStyle = hlColor;
           ctx.fillRect(cx, cellY, cellW - 1, cellH);
           ctx.restore();
         } else {
-          ctx.fillStyle = "#1c2a3a";
+          ctx.fillStyle = _acTheme().cellBg;
           ctx.fillRect(cx, cellY, cellW - 1, cellH);
         }
 
@@ -414,14 +469,16 @@ class ArrayCanvas {
         ctx.lineWidth   = isWatchman ? 2 : hlColor ? 1.5 : 1;
         ctx.strokeRect(cx + 0.5, cellY + 0.5, cellW - 2, cellH - 1);
 
-        // 値ラベル
-        const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
-        ctx.fillStyle    = "#ffffff";
-        ctx.font         = `${fs}px monospace`;
-        ctx.textAlign    = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(values[i]), cx + cellW / 2, cellY + cellH / 2);
-        ctx.textBaseline = "alphabetic";
+        // 値ラベル — セルが十分大きい場合のみ
+        if (cellW >= 10) {
+          const fs = Math.max(8, Math.min(14, cellW * 0.48, cellH * 0.48));
+          ctx.fillStyle    = _acTheme().cellText;
+          ctx.font         = `${fs}px monospace`;
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(values[i]), cx + cellW / 2, cellY + cellH / 2);
+          ctx.textBaseline = "alphabetic";
+        }
       }
 
       // インデックスラベル (下) — 使用済み・未使用問わず表示
@@ -433,6 +490,71 @@ class ArrayCanvas {
         ctx.font = `${iFs}px sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(String(i), cx + cellW / 2, cellY + cellH + 12);
+      }
+    }
+
+    // size / capacity プログレスバー（vector capacity アニメーション用）
+    if (hasSize && n > 0) {
+      const size     = unused_from;
+      const capacity = n;
+      const usedW    = size * cellW;
+      const capW     = capacity * cellW;
+      const barH     = 7;
+      const barY     = cellY + cellH + 20;   // インデックスラベル(+12)の下
+      const textY    = barY + barH + 12;
+
+      // capacity バー（背景・暗め）
+      ctx.fillStyle = "rgba(60,100,170,0.22)";
+      ctx.fillRect(startX, barY, capW - 1, barH);
+      ctx.strokeStyle = "rgba(80,130,200,0.4)";
+      ctx.lineWidth = 1; ctx.setLineDash([]);
+      ctx.strokeRect(startX + 0.5, barY + 0.5, capW - 2, barH - 1);
+
+      // size バー（使用済み・緑）
+      if (usedW > 0) {
+        ctx.fillStyle = "#3ecf88";
+        ctx.fillRect(startX, barY, usedW - 1, barH);
+      }
+
+      // 境界の縦線
+      if (size > 0 && size < capacity) {
+        ctx.strokeStyle = "#3ecf88";
+        ctx.lineWidth = 2; ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(startX + usedW, barY - 1);
+        ctx.lineTo(startX + usedW, barY + barH + 1);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // ラベルを描画（バー幅に応じて配置を変える）
+      const sizeStr = `size = ${size}`;
+      const capStr  = `capacity = ${capacity}`;
+      ctx.font = "bold 13px sans-serif";
+      const sizeW = ctx.measureText(sizeStr).width;
+      ctx.font = "12px sans-serif";
+      const capW2 = ctx.measureText(capStr).width;
+
+      if (capW >= sizeW + capW2 + 16) {
+        // 幅が十分: 左右に分けて表示
+        ctx.font = "bold 13px sans-serif";
+        ctx.fillStyle = "#3ecf88";
+        ctx.textAlign = "left";
+        ctx.fillText(sizeStr, startX, textY);
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "rgba(100,160,220,0.85)";
+        ctx.textAlign = "right";
+        ctx.fillText(capStr, startX + capW, textY);
+      } else {
+        // 幅が狭い: 中央に「size=N  /  cap=M」をまとめて表示
+        ctx.font = "bold 12px sans-serif";
+        ctx.fillStyle = "#3ecf88";
+        ctx.textAlign = "left";
+        ctx.fillText(`size=${size}`, startX, textY);
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = "rgba(100,160,220,0.85)";
+        ctx.textAlign = "right";
+        ctx.fillText(`cap=${capacity}`, startX + capW, textY);
       }
     }
 
@@ -517,7 +639,7 @@ class ArrayCanvas {
     // 辺 (heap_size 以内。ghost 辺は暗く描画)
     for (let i = 1; i < heap_size; i++) {
       const isGhostEdge = i < confirmed_min;
-      ctx.strokeStyle = isGhostEdge ? "#1b2535" : "#334455";
+      ctx.strokeStyle = isGhostEdge ? _acTheme().dimEdge : _acTheme().edgeColor;
       ctx.lineWidth   = isGhostEdge ? 0.5 : 1;
       const parent = Math.floor((i - 1) / 2);
       const p1 = nodePos(parent), p2 = nodePos(i);
@@ -537,12 +659,12 @@ class ArrayCanvas {
 
       if (isGhost) {
         // 未処理ノード: 非常に暗い色で描画 (存在はほのめかす)
-        ctx.fillStyle   = "#0f1820";
+        ctx.fillStyle   = _acTheme().ghostFill;
         ctx.fill();
-        ctx.strokeStyle = "#1c2d3e";
+        ctx.strokeStyle = _acTheme().ghostStroke;
         ctx.lineWidth   = 0.8;
         ctx.stroke();
-        ctx.fillStyle    = "#253545";
+        ctx.fillStyle    = _acTheme().ghostText;
         ctx.font         = `${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -551,17 +673,17 @@ class ArrayCanvas {
       } else {
         // 確定済みノード: 通常描画
         if (hlColor) {
-          ctx.fillStyle = "#0d1117"; ctx.fill();
+          ctx.fillStyle = _acTheme().nodeBg; ctx.fill();
           ctx.save(); ctx.globalAlpha = 0.4;
           ctx.fillStyle = hlColor; ctx.fill(); ctx.restore();
           ctx.strokeStyle = hlColor; ctx.lineWidth = 2;
         } else {
-          ctx.fillStyle = "#1a2a3a"; ctx.fill();
+          ctx.fillStyle = _acTheme().cellBg; ctx.fill();
           ctx.strokeStyle = "#4472C4"; ctx.lineWidth = 1.5;
         }
         ctx.stroke();
 
-        ctx.fillStyle    = "#ffffff";
+        ctx.fillStyle    = _acTheme().cellText;
         ctx.font         = `${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -571,7 +693,7 @@ class ArrayCanvas {
         // インデックス (右下小)
         if (nodeR >= 12) {
           const iFs = Math.max(6, Math.min(8, nodeR * 0.42));
-          ctx.fillStyle = "#3a5070";
+          ctx.fillStyle = _acTheme().indexLabelColor;
           ctx.font      = `${iFs}px sans-serif`;
           ctx.textAlign = "center";
           ctx.fillText(String(i), pos.x + nodeR * 0.7, pos.y + nodeR + iFs);
@@ -644,19 +766,19 @@ class ArrayCanvas {
         const cx     = PAD_L + LBL_W + SEP_W + cellPad + c * (cellW + cellPad);
         const isLast = isActive && c === cells.length - 1;
 
-        ctx.fillStyle = "#0d1117";
+        ctx.fillStyle = _acTheme().nodeBg;
         ctx.fillRect(cx, rowY + 2, cellW, rowH - 4);
         ctx.save(); ctx.globalAlpha = isLast ? 0.5 : 0.22;
         ctx.fillStyle = color;
         ctx.fillRect(cx, rowY + 2, cellW, rowH - 4);
         ctx.restore();
 
-        ctx.strokeStyle = isLast ? "#ffffff" : color;
+        ctx.strokeStyle = isLast ? _acTheme().cellText : color;
         ctx.lineWidth   = isLast ? 1.5 : 0.8;
         ctx.strokeRect(cx + 0.5, rowY + 2.5, cellW - 1, rowH - 5);
 
         const fs = Math.max(7, Math.min(12, cellW * 0.44, (rowH - 4) * 0.55));
-        ctx.fillStyle    = "#ffffff";
+        ctx.fillStyle    = _acTheme().cellText;
         ctx.font         = `${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -741,7 +863,7 @@ class ArrayCanvas {
         const cellY  = cellStartY + c * cellH + cellPad;
         const isLast = isActive && c === cells.length - 1;
 
-        ctx.fillStyle = "#0d1117";
+        ctx.fillStyle = _acTheme().nodeBg;
         ctx.fillRect(colX, cellY, cellW, cellH - cellPad);
         ctx.save();
         ctx.globalAlpha = isLast ? 0.55 : 0.25;
@@ -749,11 +871,11 @@ class ArrayCanvas {
         ctx.fillRect(colX, cellY, cellW, cellH - cellPad);
         ctx.restore();
 
-        ctx.strokeStyle = isLast ? "#ffffff" : color;
+        ctx.strokeStyle = isLast ? _acTheme().cellText : color;
         ctx.lineWidth   = isLast ? 1.2 : 0.6;
         ctx.strokeRect(colX + 0.5, cellY + 0.5, cellW - 1, cellH - cellPad - 1);
 
-        ctx.fillStyle    = "#ffffff";
+        ctx.fillStyle    = _acTheme().cellText;
         ctx.font         = `${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -804,10 +926,7 @@ class ArrayCanvas {
     ctx.fillText(label, PAD, tapeY + cellH / 2);
     ctx.textBaseline = "alphabetic";
 
-    // 左端ハッシュ記号
-    this._drawTapeHashmark(ctx, PAD + LBL_W, tapeY, cellW * 0.6, cellH);
-    // 右端ハッシュ記号
-    this._drawTapeHashmark(ctx, PAD + LBL_W + nVis * cellW, tapeY, cellW * 0.6, cellH);
+    // 端のハッシュ記号は bright テーマで目立つため廃止（範囲外セルが不可視なので不要）
 
     // セル
     for (let vi = 0; vi < nVis; vi++) {
@@ -817,21 +936,12 @@ class ArrayCanvas {
       const isHead = (idx === head);
 
       if (!inData) {
-        // 空白セル (ハッチング)
-        ctx.fillStyle = "#0a0e18";
+        // データ範囲外セル → 背景色で完全に塗りつぶして不可視にする
+        ctx.fillStyle = _acTheme().canvasBg;
         ctx.fillRect(cx, tapeY, cellW - 1, cellH);
-        ctx.strokeStyle = "#1e2a3a"; ctx.lineWidth = 0.5;
-        ctx.strokeRect(cx + 0.5, tapeY + 0.5, cellW - 2, cellH - 1);
-        ctx.save(); ctx.strokeStyle = "#1e3040"; ctx.lineWidth = 0.5;
-        ctx.setLineDash([3, 4]);
-        for (let hx = cx + 4; hx < cx + cellW - 2; hx += 5) {
-          ctx.beginPath(); ctx.moveTo(hx, tapeY + 2);
-          ctx.lineTo(hx - (cellH - 4) * 0.5, tapeY + cellH - 2); ctx.stroke();
-        }
-        ctx.restore();
       } else {
         // データセル
-        ctx.fillStyle = "#1c2a3a";
+        ctx.fillStyle = _acTheme().cellBg;
         ctx.fillRect(cx, tapeY, cellW - 1, cellH);
         if (isHead) {
           ctx.save(); ctx.globalAlpha = 0.45;
@@ -839,12 +949,12 @@ class ArrayCanvas {
           ctx.fillRect(cx, tapeY, cellW - 1, cellH);
           ctx.restore();
         }
-        ctx.strokeStyle = isHead ? color : "#2a4060";
+        ctx.strokeStyle = isHead ? color : _acTheme().edgeColor;
         ctx.lineWidth   = isHead ? 2 : 0.8;
         ctx.strokeRect(cx + 0.5, tapeY + 0.5, cellW - 2, cellH - 1);
 
         const fs = Math.max(8, Math.min(13, cellW * 0.42, cellH * 0.46));
-        ctx.fillStyle    = "#ffffff";
+        ctx.fillStyle    = _acTheme().cellText;
         ctx.font         = `${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -864,9 +974,9 @@ class ArrayCanvas {
 
   _drawTapeHashmark(ctx, x, tapeY, w, cellH) {
     ctx.save();
-    ctx.fillStyle = "#0a0e18";
+    ctx.fillStyle = _acTheme().cellEmptyBg;
     ctx.fillRect(x, tapeY, w - 1, cellH);
-    ctx.strokeStyle = "#1e3040"; ctx.lineWidth = 0.5;
+    ctx.strokeStyle = _acTheme().dimEdge; ctx.lineWidth = 0.5;
     ctx.strokeRect(x + 0.5, tapeY + 0.5, w - 2, cellH - 1);
     ctx.setLineDash([3, 4]);
     for (let hx = x + 3; hx < x + w - 2; hx += 5) {
@@ -945,13 +1055,13 @@ class ArrayCanvas {
       if (node.left) {
         ctx.beginPath(); ctx.moveTo(node._x, node._y);
         ctx.lineTo(node.left._x, node.left._y);
-        ctx.strokeStyle = "#334455"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 1; ctx.stroke();
         drawEdges(node.left);
       }
       if (node.right) {
         ctx.beginPath(); ctx.moveTo(node._x, node._y);
         ctx.lineTo(node.right._x, node.right._y);
-        ctx.strokeStyle = "#334455"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 1; ctx.stroke();
         drawEdges(node.right);
       }
     }
@@ -964,7 +1074,7 @@ class ArrayCanvas {
 
       ctx.beginPath();
       ctx.arc(node._x, node._y, nodeR, 0, Math.PI * 2);
-      ctx.fillStyle = "#0d1117"; ctx.fill();
+      ctx.fillStyle = _acTheme().nodeBg; ctx.fill();
       ctx.save(); ctx.globalAlpha = 0.4;
       ctx.fillStyle = color; ctx.fill(); ctx.restore();
       ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
@@ -1050,14 +1160,14 @@ class ArrayCanvas {
       if (i > 0 && rows[i].depth > rows[i - 1].depth) {
         const prevX = PAD_L + rows[i - 1].depth * INDENT + 3;
         const prevY = areaY + PAD_T + (i - 1) * rowH + rowH * 0.75;
-        ctx.strokeStyle = "#2a4060"; ctx.lineWidth = 0.8;
+        ctx.strokeStyle = _acTheme().connectorColor; ctx.lineWidth = 0.8;
         ctx.beginPath();
         ctx.moveTo(prevX, prevY);
         ctx.lineTo(prevX, rowY + rowH * 0.5);
         ctx.lineTo(rowX - 1, rowY + rowH * 0.5);
         ctx.stroke();
         // 矢印
-        ctx.fillStyle = "#2a4060";
+        ctx.fillStyle = _acTheme().connectorColor;
         ctx.beginPath();
         ctx.moveTo(rowX - 1, rowY + rowH * 0.5);
         ctx.lineTo(rowX - 5, rowY + rowH * 0.5 - 3);
@@ -1173,7 +1283,7 @@ class ArrayCanvas {
 
     // 空リスト表示
     if (n === 0) {
-      ctx.fillStyle = "#445566";
+      ctx.fillStyle = _acTheme().emptyText;
       ctx.font      = "12px monospace";
       ctx.textAlign = "center";
       ctx.fillText("(空)", cw / 2, areaY + areaH / 2);
@@ -1191,7 +1301,7 @@ class ArrayCanvas {
       const hlColor = highlights[String(i)];
 
       // ノード背景
-      ctx.fillStyle = "#1c2a3a";
+      ctx.fillStyle = _acTheme().cellBg;
       this._rrect(ctx, x, nodeY, NODE_W, NODE_H, CORNER);
       ctx.fill();
 
@@ -1213,7 +1323,7 @@ class ArrayCanvas {
 
       // 値テキスト
       const fs = Math.max(10, Math.min(15, NODE_W * 0.32));
-      ctx.fillStyle    = hlColor || "#ddd";
+      ctx.fillStyle    = hlColor || _acTheme().cellValueColor;
       ctx.font         = `bold ${fs}px monospace`;
       ctx.textAlign    = "center";
       ctx.textBaseline = "middle";
@@ -1240,10 +1350,10 @@ class ArrayCanvas {
       const lastX = nodeXs[n - 1];
       const ax1   = lastX + NODE_W;
       const ax2   = ax1 + ARROW_W;
-      ctx.strokeStyle = "#3a5060";
+      ctx.strokeStyle = _acTheme().connectorColor;
       ctx.lineWidth   = 1.5;
       ctx.beginPath(); ctx.moveTo(ax1, midY); ctx.lineTo(ax2 - 8, midY); ctx.stroke();
-      ctx.fillStyle    = "#3a5060";
+      ctx.fillStyle    = _acTheme().connectorColor;
       ctx.font         = "bold 10px monospace";
       ctx.textAlign    = "left";
       ctx.textBaseline = "middle";
@@ -1270,7 +1380,7 @@ class ArrayCanvas {
       this._rrect(ctx, px - bw/2, badgeTop, bw, BADGE_H, br); ctx.fill();
       ctx.restore();
       // バッジテキスト
-      ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(lbl, px, badgeTop + BADGE_H / 2);
       ctx.textBaseline = "alphabetic";
       // 縦線（バッジ下端→ノード上端）
@@ -1353,12 +1463,12 @@ class ArrayCanvas {
     ctx.fillStyle = ptr_colors[1] || "#4499dd";
     this._rrect(ctx, midX - botBw/2, bottomLineY + 4, botBw, botBh, 3); ctx.fill();
     ctx.restore();
-    ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(botLbl, midX, bottomLineY + 4 + botBh/2);
     ctx.textBaseline = "alphabetic";
 
     if (n === 0) {
-      ctx.fillStyle = "#445566"; ctx.font = "12px monospace";
+      ctx.fillStyle = _acTheme().emptyText; ctx.font = "12px monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("(空)", midX, (areaY + PAD_TOP + bottomLineY) / 2);
       ctx.textBaseline = "alphabetic";
@@ -1379,9 +1489,9 @@ class ArrayCanvas {
     // ── null ターミネータ ─────────────────────────────────────────
     if (!is_doubly) {
       const lastBottom = nodeYs[n - 1] + NODE_H;
-      ctx.strokeStyle = "#3a5060"; ctx.lineWidth = 1.2;
+      ctx.strokeStyle = _acTheme().connectorColor; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(midX, lastBottom); ctx.lineTo(midX, nullY); ctx.stroke();
-      ctx.fillStyle = "#3a5060"; ctx.font = "bold 10px monospace";
+      ctx.fillStyle = _acTheme().connectorColor; ctx.font = "bold 10px monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("null", midX, nullY + NULL_H / 2);
       ctx.textBaseline = "alphabetic";
@@ -1392,7 +1502,7 @@ class ArrayCanvas {
       const ny      = nodeYs[i];
       const hlColor = highlights[String(i)];
 
-      ctx.fillStyle = "#1c2a3a";
+      ctx.fillStyle = _acTheme().cellBg;
       this._rrect(ctx, nodeX, ny, NODE_W, NODE_H, CORNER); ctx.fill();
       if (hlColor) {
         ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = hlColor;
@@ -1402,7 +1512,7 @@ class ArrayCanvas {
       ctx.lineWidth   = hlColor ? 2.5 : 1.5;
       this._rrect(ctx, nodeX, ny, NODE_W, NODE_H, CORNER); ctx.stroke();
 
-      ctx.fillStyle = hlColor || "#ddd";
+      ctx.fillStyle = hlColor || _acTheme().cellValueColor;
       ctx.font = "bold 13px monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(String(nodes[i]), midX, ny + NODE_H / 2);
@@ -1444,7 +1554,7 @@ class ArrayCanvas {
       const bw = tw + 10, bh = 14;
       ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = topCol;
       this._rrect(ctx, ptrX1 - bw - 2, topMidY - bh/2, bw, bh, 3); ctx.fill(); ctx.restore();
-      ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(topLbl, ptrX1 - bw/2 - 2, topMidY);
       ctx.textBaseline = "alphabetic";
     }
@@ -1488,7 +1598,7 @@ class ArrayCanvas {
     const botBw = botTw + 10, botBh = 14;
     ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = "#4499dd";
     this._rrect(ctx, cellX + cellW/2 - botBw/2, bottomY + 4, botBw, botBh, 3); ctx.fill(); ctx.restore();
-    ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("BOTTOM", cellX + cellW / 2, bottomY + 4 + botBh/2);
     ctx.textBaseline = "alphabetic";
 
@@ -1498,7 +1608,7 @@ class ArrayCanvas {
       const hlColor = highlights[String(i)];
 
       // 背景
-      ctx.fillStyle = hasVal ? "#1c2a3a" : "#0a0e18";
+      ctx.fillStyle = hasVal ? _acTheme().cellBg : _acTheme().cellEmptyBg;
       ctx.fillRect(cellX, cellY, cellW, cellH - 1);
 
       // ハイライト
@@ -1508,14 +1618,14 @@ class ArrayCanvas {
       }
 
       // 枠線
-      ctx.strokeStyle = hlColor || (hasVal ? "#4472C4" : "#1e2833");
+      ctx.strokeStyle = hlColor || (hasVal ? "#4472C4" : _acTheme().dimEdge);
       ctx.lineWidth   = hlColor ? 2 : 0.8;
       ctx.strokeRect(cellX + 0.5, cellY + 0.5, cellW - 1, cellH - 2);
 
       // 値
       if (hasVal) {
         const fs = Math.max(9, Math.min(14, cellH * 0.50));
-        ctx.fillStyle = hlColor || "#ddd";
+        ctx.fillStyle = hlColor || _acTheme().cellValueColor;
         ctx.font = `bold ${fs}px monospace`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(String(values[i]), cellX + cellW / 2, cellY + cellH / 2);
@@ -1523,7 +1633,7 @@ class ArrayCanvas {
       }
 
       // インデックス（左）
-      ctx.fillStyle = "#3a5570"; ctx.font = "9px monospace";
+      ctx.fillStyle = _acTheme().indexLabelColor; ctx.font = "9px monospace";
       ctx.textAlign = "right";
       ctx.fillText(String(i), cellX - 4, cellY + cellH / 2 + 3);
     }
@@ -1549,7 +1659,7 @@ class ArrayCanvas {
       const bw = tw + 10, bh = 14;
       ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = "#44cc66";
       this._rrect(ctx, ax2, midY - bh/2, bw, bh, 3); ctx.fill(); ctx.restore();
-      ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("TOP", ax2 + bw/2, midY);
       ctx.textBaseline = "alphabetic";
     }
@@ -1594,7 +1704,7 @@ class ArrayCanvas {
     const btw = ctx.measureText("BOTTOM").width + 8, bth = 12;
     ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = "#4499dd";
     this._rrect(ctx, CELL_X + CELL_W / 2 - btw / 2, botY + 3, btw, bth, 3); ctx.fill(); ctx.restore();
-    ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("BOTTOM", CELL_X + CELL_W / 2, botY + 3 + bth / 2);
     ctx.textBaseline = "alphabetic";
 
@@ -1627,7 +1737,7 @@ class ArrayCanvas {
         for (const ch of [nd.left, nd.right]) {
           if (!ch) continue;
           ctx.beginPath(); ctx.moveTo(nd._x, nd._y); ctx.lineTo(ch._x, ch._y);
-          ctx.strokeStyle = "#2a3d50"; ctx.lineWidth = 0.8; ctx.stroke();
+          ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 0.8; ctx.stroke();
           drawE(ch);
         }
       };
@@ -1643,9 +1753,9 @@ class ArrayCanvas {
           ctx.beginPath(); ctx.arc(x, y, nR, 0, Math.PI * 2); ctx.fill(); ctx.restore();
           ctx.strokeStyle = highlight; ctx.lineWidth = 2; ctx.stroke();
         } else {
-          ctx.strokeStyle = "#1e3045"; ctx.lineWidth = 0.8; ctx.stroke();
+          ctx.strokeStyle = _acTheme().dimEdge; ctx.lineWidth = 0.8; ctx.stroke();
         }
-        ctx.fillStyle = "#fff"; ctx.font = `bold ${fs}px monospace`;
+        ctx.fillStyle = _acTheme().cellText; ctx.font = `bold ${fs}px monospace`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(String(nd.key), x, y);
         ctx.textBaseline = "alphabetic";
@@ -1667,19 +1777,19 @@ class ArrayCanvas {
       const cellTopY = slotTopY + (rowH - cellH) / 2;
 
       // セル背景
-      ctx.fillStyle = item ? "#1c2a3a" : "#0a0e18";
+      ctx.fillStyle = item ? _acTheme().cellBg : _acTheme().cellEmptyBg;
       this._rrect(ctx, CELL_X, cellTopY, CELL_W, cellH, 3); ctx.fill();
       if (hl) {
         ctx.save(); ctx.globalAlpha = 0.20; ctx.fillStyle = hl;
         this._rrect(ctx, CELL_X, cellTopY, CELL_W, cellH, 3); ctx.fill(); ctx.restore();
       }
       // セル枠
-      ctx.strokeStyle = hl || (item ? "#4472C4" : "#1e2833");
+      ctx.strokeStyle = hl || (item ? "#4472C4" : _acTheme().dimEdge);
       ctx.lineWidth   = hl ? 2 : 0.8;
       this._rrect(ctx, CELL_X + 0.5, cellTopY + 0.5, CELL_W - 1, cellH - 1, 3); ctx.stroke();
 
       // インデックスラベル（左）
-      ctx.fillStyle = "#3a5570"; ctx.font = "9px monospace";
+      ctx.fillStyle = _acTheme().indexLabelColor; ctx.font = "9px monospace";
       ctx.textAlign = "right"; ctx.textBaseline = "middle";
       ctx.fillText(String(i), CELL_X - 3, slotMidY);
 
@@ -1795,7 +1905,7 @@ class ArrayCanvas {
 
       // 背景
       seg();
-      ctx.fillStyle = isAct ? "#1a2a3a" : "#080c14";
+      ctx.fillStyle = isAct ? _acTheme().cellBg : _acTheme().cellEmptyBg;
       ctx.fill();
 
       // ハイライト
@@ -1807,7 +1917,7 @@ class ArrayCanvas {
 
       // 枠線
       seg();
-      ctx.strokeStyle = hlColor || (isAct ? "#4472C4" : "#1a2030");
+      ctx.strokeStyle = hlColor || (isAct ? "#4472C4" : _acTheme().dimEdge);
       ctx.lineWidth   = hlColor ? 2 : 0.8;
       ctx.stroke();
 
@@ -1817,7 +1927,7 @@ class ArrayCanvas {
         const ty = cy + midR * Math.sin(midA);
         const arcLen = midR * sliceA;
         const fs = Math.max(8, Math.min(13, arcLen * 0.40));
-        ctx.fillStyle = hlColor || "#ddd";
+        ctx.fillStyle = hlColor || _acTheme().cellValueColor;
         ctx.font = `bold ${fs}px monospace`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(String(values[i]), tx, ty);
@@ -1834,13 +1944,13 @@ class ArrayCanvas {
     }
 
     // 外縁・内縁の境界円（強調）
-    ctx.strokeStyle = "#2a3a50"; ctx.lineWidth = 1.2;
+    ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(cx, cy, outerR, 0, 2 * Math.PI); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, 2 * Math.PI); ctx.stroke();
 
     // 空キュー表示
     if (count === 0) {
-      ctx.fillStyle = "#445566"; ctx.font = "11px monospace";
+      ctx.fillStyle = _acTheme().emptyText; ctx.font = "11px monospace";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("(空)", cx, cy);
       ctx.textBaseline = "alphabetic";
@@ -1879,7 +1989,7 @@ class ArrayCanvas {
       this._rrect(ctx, bcx - bw/2, bcy - BADGE_H/2, bw, BADGE_H, 3);
       ctx.fill(); ctx.restore();
 
-      ctx.fillStyle = "#0d1117"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = _acTheme().badgeText; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(lbl, bcx, bcy);
       ctx.textBaseline = "alphabetic";
     };
@@ -1996,7 +2106,7 @@ class ArrayCanvas {
         const dimEdge = node.dim || node.left.dim;
         ctx.beginPath(); ctx.moveTo(node._x, node._y);
         ctx.lineTo(node.left._x, node.left._y);
-        ctx.strokeStyle = dimEdge ? "#1a2535" : "#334455";
+        ctx.strokeStyle = dimEdge ? _acTheme().dimEdge : _acTheme().edgeColor;
         ctx.lineWidth   = dimEdge ? 0.5 : 1; ctx.stroke();
         drawEdges(node.left);
       }
@@ -2004,7 +2114,7 @@ class ArrayCanvas {
         const dimEdge = node.dim || node.right.dim;
         ctx.beginPath(); ctx.moveTo(node._x, node._y);
         ctx.lineTo(node.right._x, node.right._y);
-        ctx.strokeStyle = dimEdge ? "#1a2535" : "#334455";
+        ctx.strokeStyle = dimEdge ? _acTheme().dimEdge : _acTheme().edgeColor;
         ctx.lineWidth   = dimEdge ? 0.5 : 1; ctx.stroke();
         drawEdges(node.right);
       }
@@ -2020,16 +2130,16 @@ class ArrayCanvas {
       if (dim) {
         // Ghost / unbuilt node
         ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2);
-        ctx.fillStyle = "#0f1820"; ctx.fill();
-        ctx.strokeStyle = "#1c2d3e"; ctx.lineWidth = 0.8; ctx.stroke();
-        ctx.fillStyle = "#253545"; ctx.font = `${fs}px monospace`;
+        ctx.fillStyle = _acTheme().ghostFill; ctx.fill();
+        ctx.strokeStyle = _acTheme().ghostStroke; ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.fillStyle = _acTheme().ghostText; ctx.font = `${fs}px monospace`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(String(node.key), x, y); ctx.textBaseline = "alphabetic";
       } else {
         // Node circle
         ctx.beginPath();
         ctx.arc(x, y, nodeR, 0, Math.PI * 2);
-        ctx.fillStyle = "#0d1117";
+        ctx.fillStyle = _acTheme().nodeBg;
         ctx.fill();
 
         // Tinted fill
@@ -2045,7 +2155,7 @@ class ArrayCanvas {
         ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2); ctx.stroke();
 
         // Key label
-        ctx.fillStyle    = "#ffffff";
+        ctx.fillStyle    = _acTheme().cellText;
         ctx.font         = `bold ${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -2057,6 +2167,86 @@ class ArrayCanvas {
       drawNodes(node.right);
     }
     drawNodes(root);
+
+    // ── Rotation arc overlay (AVL / tree rotation) ───────────────────
+    if (obj.rotation) {
+      const rotType  = obj.rotation.type;
+      const rotPivot = obj.rotation.pivot;
+      const rotChild = obj.rotation.child ?? null;  // LR/RL のみ非null
+
+      // キーでノードを探す（assignPos で _x, _y 付与済み）
+      const findNode = (n, key) => {
+        if (!n) return null;
+        if (n.key === key) return n;
+        return findNode(n.left, key) || findNode(n.right, key);
+      };
+
+      const pn = findNode(root, rotPivot);
+      const cn = rotChild !== null ? findNode(root, rotChild) : null;
+
+      // cx,cy の位置に半円弧＋矢印を描く
+      // ccw=false → 右半円(CW,時計回り) / ccw=true → 左半円(CCW,反時計回り)
+      const drawArcAt = (cx, cy, ccw, dashed) => {
+        const R = nodeR * 2.8;
+        ctx.save();
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = "#ff8800";
+        ctx.fillStyle   = "#ff8800";
+        ctx.lineWidth   = 3.5;
+        ctx.setLineDash(dashed ? [7, 4] : []);
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, -Math.PI / 2, Math.PI / 2, ccw);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // 矢印ヘッド: 弧の下端 (cx, cy+R)
+        // CCW弧(左): 進行方向=右 → ang=0  /  CW弧(右): 進行方向=左 → ang=π
+        const ax = cx, ay = cy + R;
+        const ang = ccw ? 0 : Math.PI;
+        const H = 10;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - H * Math.cos(ang - 0.6), ay - H * Math.sin(ang - 0.6));
+        ctx.lineTo(ax - H * Math.cos(ang + 0.6), ay - H * Math.sin(ang + 0.6));
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      };
+
+      if (pn && pn._x !== undefined) {
+        const px = pn._x, py = pn._y;
+        if (rotType === 'LL') {
+          // pivot で右回転(CW) → 右半円
+          drawArcAt(px, py, false, false);
+        } else if (rotType === 'RR') {
+          // pivot で左回転(CCW) → 左半円
+          drawArcAt(px, py, true, false);
+        } else if (rotType === 'LR') {
+          // ① 子ノードで左回転(CCW) → 左半円
+          if (cn && cn._x !== undefined) drawArcAt(cn._x, cn._y, true, true);
+          // ② pivot で右回転(CW) → 右半円
+          drawArcAt(px, py, false, true);
+        } else if (rotType === 'RL') {
+          // ① 子ノードで右回転(CW) → 右半円
+          if (cn && cn._x !== undefined) drawArcAt(cn._x, cn._y, false, true);
+          // ② pivot で左回転(CCW) → 左半円
+          drawArcAt(px, py, true, true);
+        }
+
+        // ラベル（pivot 弧の上に）
+        const rotLabels = { LL: '右回転', RR: '左回転', LR: '左右二重回転', RL: '右左二重回転' };
+        const R = nodeR * 2.8;
+        ctx.save();
+        ctx.globalAlpha  = 1.0;
+        ctx.font         = `bold ${Math.max(10, Math.min(13, nodeR * 0.75))}px sans-serif`;
+        ctx.fillStyle    = "#ff8800";
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(rotLabels[rotType] || rotType, px, py - R + 2);
+        ctx.textBaseline = "alphabetic";
+        ctx.restore();
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────
 
     ctx.restore();
   }
@@ -2100,7 +2290,7 @@ class ArrayCanvas {
     for (const e of edges) {
       const p1 = pos[e.from], p2 = pos[e.to];
       if (!p1 || !p2) continue;
-      const col = e.highlight ? "#ffcc44" : "#2a4060";
+      const col = e.highlight ? "#ffcc44" : _acTheme().edgeColor;
       ctx.strokeStyle = col;
       ctx.lineWidth   = e.highlight ? 2.5 : 1.2;
       if (e.directed || directed) {
@@ -2132,7 +2322,7 @@ class ArrayCanvas {
       const hl    = n.highlight;
 
       ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2);
-      ctx.fillStyle = "#0d1117"; ctx.fill();
+      ctx.fillStyle = _acTheme().nodeBg; ctx.fill();
 
       ctx.save(); ctx.globalAlpha = hl ? 0.55 : 0.28;
       ctx.fillStyle = hl || color;
@@ -2143,7 +2333,7 @@ class ArrayCanvas {
       ctx.lineWidth   = hl ? 2.5 : 1.5;
       ctx.beginPath(); ctx.arc(x, y, nodeR, 0, Math.PI * 2); ctx.stroke();
 
-      ctx.fillStyle    = "#ffffff";
+      ctx.fillStyle    = _acTheme().cellText;
       ctx.font         = `bold ${fs}px monospace`;
       ctx.textAlign    = "center";
       ctx.textBaseline = "middle";
@@ -2195,7 +2385,7 @@ class ArrayCanvas {
 
       // Main cell
       ctx.fillStyle = (slot.key !== null || (slot.chain && slot.chain.length > 0))
-                      ? "#1c2a3a" : "#0a0e18";
+                      ? _acTheme().cellBg : _acTheme().cellEmptyBg;
       ctx.fillRect(startX, cellY, cellW, cellH - 1);
 
       if (hl || isAct) {
@@ -2205,13 +2395,13 @@ class ArrayCanvas {
         ctx.restore();
       }
 
-      ctx.strokeStyle = hl ? hl : (isAct ? "#ffcc44" : (slot.key !== null ? "#4472C4" : "#1e2833"));
+      ctx.strokeStyle = hl ? hl : (isAct ? "#ffcc44" : (slot.key !== null ? "#4472C4" : _acTheme().dimEdge));
       ctx.lineWidth   = (hl || isAct) ? 2 : 0.8;
       ctx.strokeRect(startX + 0.5, cellY + 0.5, cellW - 1, cellH - 2);
 
       if (slot.key !== null) {
         const fs = Math.max(8, Math.min(13, cellH * 0.50));
-        ctx.fillStyle    = hl ? hl : "#ddd";
+        ctx.fillStyle    = hl ? hl : _acTheme().cellValueColor;
         ctx.font         = `bold ${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
@@ -2219,7 +2409,7 @@ class ArrayCanvas {
         ctx.textBaseline = "alphabetic";
       } else if (!slot.chain || slot.chain.length === 0) {
         // Empty marker
-        ctx.fillStyle = "#2a3a4a"; ctx.font = "9px monospace";
+        ctx.fillStyle = _acTheme().emptyText; ctx.font = "9px monospace";
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText("—", startX + cellW / 2, cellY + cellH / 2);
         ctx.textBaseline = "alphabetic";
@@ -2243,14 +2433,14 @@ class ArrayCanvas {
           ctx.closePath(); ctx.fill();
 
           // Chain node box
-          ctx.fillStyle = "#1a2f3a";
+          ctx.fillStyle = _acTheme().cellBg;
           ctx.fillRect(cx, cellY + 1, chainCellW, cellH - 3);
           ctx.strokeStyle = (slot.chainHL && slot.chainHL[j]) ? slot.chainHL[j] : "#4472C4";
           ctx.lineWidth = (slot.chainHL && slot.chainHL[j]) ? 2 : 0.8;
           ctx.strokeRect(cx + 0.5, cellY + 1.5, chainCellW - 1, cellH - 4);
 
           const fs2 = Math.max(7, Math.min(11, chainCellW * 0.42));
-          ctx.fillStyle    = "#ddd";
+          ctx.fillStyle    = _acTheme().cellValueColor;
           ctx.font         = `${fs2}px monospace`;
           ctx.textAlign    = "center";
           ctx.textBaseline = "middle";
@@ -2345,7 +2535,7 @@ class ArrayCanvas {
         const py   = node._y + NODE_H / 2;
         const cy   = child._y - NODE_H / 2;
         ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(child._x, cy);
-        ctx.strokeStyle = "#334455"; ctx.lineWidth = 1; ctx.stroke();
+        ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 1; ctx.stroke();
         drawEdges(child);
       }
     }
@@ -2364,7 +2554,7 @@ class ArrayCanvas {
         const hl = node.highlight && node.highlight[ki];
 
         // 背景
-        ctx.fillStyle = "#1c2a3a";
+        ctx.fillStyle = _acTheme().cellBg;
         ctx.fillRect(cx, ny, CELL_W - 1, NODE_H);
         if (hl) {
           ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = hl;
@@ -2377,7 +2567,7 @@ class ArrayCanvas {
         ctx.strokeRect(cx + 0.5, ny + 0.5, CELL_W - 2, NODE_H - 1);
 
         // キー値
-        ctx.fillStyle    = "#ffffff";
+        ctx.fillStyle    = _acTheme().cellText;
         ctx.font         = `bold ${fs}px monospace`;
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
