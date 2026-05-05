@@ -2214,7 +2214,7 @@ def _postorder(root):
     return _postorder(root["left"]) + _postorder(root["right"]) + [root["key"]]
 
 
-def _bst_obj(id_, root_dict, label="", weight=3):
+def _btview_obj(id_, root_dict, label="", weight=3):
     return {"id": id_, "type": "bst_tree", "root": root_dict,
             "label": label, "weight": weight}
 
@@ -2229,7 +2229,7 @@ def btree_traversals(n, **kwargs):
     base = [{"message": f"完全二分木  N={N}", "color": "white"}]
 
     # ── 初期フレーム (全ノード未訪問) ──
-    yield _f([_bst_obj("tree", _clone_bt(root))], base)
+    yield _f([_btview_obj("tree", _clone_bt(root))], base)
 
     traversals = [
         ("BFS (幅優先・レベル順)",     _bfs_order(root)),
@@ -2241,7 +2241,7 @@ def btree_traversals(n, **kwargs):
     for tname, order in traversals:
         visited = set()
         # タイトルフレーム
-        yield _f([_bst_obj("tree", _clone_bt(root))],
+        yield _f([_btview_obj("tree", _clone_bt(root))],
                  base + [{"message": f"── {tname} ──", "color": "cyan"}])
 
         for key in order:
@@ -2249,7 +2249,7 @@ def btree_traversals(n, **kwargs):
             tree_snap = _clone_bt(root, visited_keys=visited - {key}, active_key=key)
             seq_str = " → ".join(str(k) for k in order[:len(visited)])
             yield _f(
-                [_bst_obj("tree", tree_snap)],
+                [_btview_obj("tree", tree_snap)],
                 base + [
                     {"message": f"── {tname} ──", "color": "cyan"},
                     {"message": f"訪問: {key}", "color": "yellow"},
@@ -2260,7 +2260,7 @@ def btree_traversals(n, **kwargs):
         # 完了フレーム（全ノード緑）
         seq_str = " → ".join(str(k) for k in order)
         yield _f(
-            [_bst_obj("tree", _clone_bt(root, visited_keys=set(order)))],
+            [_btview_obj("tree", _clone_bt(root, visited_keys=set(order)))],
             base + [
                 {"message": f"── {tname} 完了 ──", "color": "cyan"},
                 {"message": f"順序: {seq_str}", "color": "#44aa44"},
@@ -2268,7 +2268,7 @@ def btree_traversals(n, **kwargs):
         )
 
     yield _f(
-        [_bst_obj("tree", _clone_bt(root, visited_keys=set(vals)))],
+        [_btview_obj("tree", _clone_bt(root, visited_keys=set(vals)))],
         base + [{"message": "全走査完了", "color": "#44aa44"}],
         finished=True,
     )
