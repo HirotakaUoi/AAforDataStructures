@@ -51,6 +51,12 @@ function _algoType(algoId) {
   return algo?.meta?.type || "search";
 }
 
+/** アルゴリズム ID が init_data をサポートするか */
+function _algoSupportsInitData(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.init_data);
+}
+
 // ===== 起動 ========================================================
 window.addEventListener("DOMContentLoaded", async () => {
   await loadMeta();
@@ -210,6 +216,7 @@ class ArrayPanel {
     this._speed            = 0.1;
     this._previewRequestId = 0;   // 非同期プレビューの競合防止カウンタ
     this._seed             = 0;   // グラフ等の乱数シード（プレビューと開始で共有）
+    this._initData         = null; // ユーザー指定の初期配列（init_data 対応アルゴのみ）
   }
 
   // ── DOM 構築 ────────────────────────────────────────────────────
@@ -285,6 +292,16 @@ class ArrayPanel {
         </div>
       </div>
 
+      <div class="params-row init-data-row" style="display:none">
+        <label class="lbl-init-data" style="flex:1;min-width:0">初期状態
+          <input type="text" class="inp-init-data"
+                 placeholder="例: 5 2 7 1  または  5,2,7,1"
+                 style="width:100%;max-width:260px;box-sizing:border-box">
+        </label>
+        <button class="btn btn-secondary btn-set-init-data" style="white-space:nowrap">設定</button>
+        <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1"></span>
+      </div>
+
       <div class="controls-row">
         <button class="btn btn-primary   btn-start">▶ 開始</button>
         <button class="btn btn-warning   btn-pause" disabled>⏸ 一時停止</button>
@@ -327,12 +344,22 @@ class ArrayPanel {
 
   // ── アルゴリズム種別に応じて UI を表示/非表示 ─────────────────
   _updateParamVisibility() {
-    const algoId = Number(this.el.querySelector(".sel-algo").value);
-    const type   = _algoType(algoId);
+    const algoId      = Number(this.el.querySelector(".sel-algo").value);
+    const type        = _algoType(algoId);
+    const hasInitData = _algoSupportsInitData(algoId);
 
     this.el.querySelector(".lbl-target")   .style.display = type === "search" ? "" : "none";
     this.el.querySelector(".lbl-condition").style.display = type === "sort"   ? "" : "none";
     // lbl-size は常に表示 (misc でも num_items は参照される)
+
+    // 初期状態行
+    this.el.querySelector(".init-data-row").style.display = hasInitData ? "" : "none";
+    if (!hasInitData) {
+      // 対応しないアルゴに切り替えたらリセット
+      this._initData = null;
+      this.el.querySelector(".inp-init-data").value = "";
+      this.el.querySelector(".init-data-info").textContent = "";
+    }
   }
 
   // ── イベントバインド ─────────────────────────────────────────
@@ -355,6 +382,12 @@ class ArrayPanel {
     q(".sel-size")     .addEventListener("change", () => { if (!this.isRunning) this._drawPreview(); });
     q(".inp-target")   .addEventListener("change", () => { if (!this.isRunning) this._drawPreview(); });
     q(".sel-condition").addEventListener("change", () => { if (!this.isRunning) this._drawPreview(); });
+
+    // 初期状態: 設定ボタン & Enter キー
+    q(".btn-set-init-data").addEventListener("click", () => this._applyInitData());
+    q(".inp-init-data").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); this._applyInitData(); }
+    });
 
     this.el.addEventListener("mousedown", () => this._bringToFront());
 
@@ -397,6 +430,37 @@ class ArrayPanel {
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup",   onUp);
     });
+  }
+
+  // ── 初期状態の解析・適用 ───────────────────────────────────────
+  _applyInitData() {
+    const raw  = this.el.querySelector(".inp-init-data").value.trim();
+    const info = this.el.querySelector(".init-data-info");
+
+    if (!raw) {
+      // 空欄 → クリア（デフォルトに戻す）
+      this._initData = null;
+      info.style.color = "#aaa";
+      info.textContent = "（デフォルトデータを使用）";
+      if (!this.isRunning) this._drawPreview();
+      return;
+    }
+
+    // コンマ・空白区切りで整数をパース
+    const tokens = raw.split(/[\s,]+/).filter(s => s !== "");
+    const nums   = tokens.map(s => parseInt(s, 10));
+    if (nums.some(isNaN) || nums.length === 0) {
+      info.style.color = "#ff6666";
+      info.textContent = "⚠ 整数をコンマまたは空白で区切って入力してください";
+      return;
+    }
+
+    this._initData = nums;
+    info.style.color = "#44cc88";
+    const preview = nums.slice(0, 8).join(", ") + (nums.length > 8 ? " …" : "");
+    info.textContent = `✓ ${nums.length} 個: ${preview}`;
+
+    if (!this.isRunning) this._drawPreview();
   }
 
   // ── 最前面へ ──────────────────────────────────────────────────
@@ -505,7 +569,11 @@ class ArrayPanel {
 
     this._seed = Math.floor(Math.random() * 1e9);
     try {
-      const res = await fetch(`/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`);
+      let previewUrl = `/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`;
+      if (this._initData && this._initData.length > 0) {
+        previewUrl += `&init_data=${encodeURIComponent(this._initData.join(","))}`;
+      }
+      const res = await fetch(previewUrl);
       if (!res.ok) return;
       const frame = await res.json();
 
@@ -573,7 +641,10 @@ class ArrayPanel {
           body.data = this._previewCache.values;
         }
       }
-      // misc: num_items だけ送れば OK
+      // misc: init_data が設定されていれば一緒に送る
+      if (type === "misc" && this._initData && this._initData.length > 0) {
+        body.init_data = this._initData;
+      }
 
       const res = await fetch("/api/start", {
         method:  "POST",

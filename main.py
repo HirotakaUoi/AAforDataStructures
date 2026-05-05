@@ -48,16 +48,27 @@ class StartParams(BaseModel):
     data:           Optional[list[int]] = None  # 初期データ (search / sort 共用)
     data_condition: int   = 0         # 0=ランダム 1=昇順 2=降順 3=ほぼ昇順 (sort 用)
     seed:           Optional[int] = None        # 乱数シード (graph 等)
+    init_data:      Optional[list[int]] = None  # ユーザー指定の初期配列 (misc init_data 対応アルゴ用)
 
 
 @app.get("/api/preview")
-def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None):
+def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None,
+                init_data: Optional[str] = None):
     """ジェネレータの第1フレームだけ返す（実行前プレビュー用）"""
     if algorithm_id not in range(len(AlgorithmList)):
         return JSONResponse({"error": "invalid algorithm_id"}, status_code=400)
     algo_name, algo_fn, algo_meta = AlgorithmList[algorithm_id]
     try:
-        gen = algo_fn(n, seed=seed)
+        kw: dict = {"seed": seed}
+        if init_data:
+            try:
+                import re
+                parsed = [int(x) for x in re.split(r"[,\s]+", init_data.strip()) if x]
+                if parsed:
+                    kw["init_data"] = parsed
+            except ValueError:
+                pass
+        gen = algo_fn(n, **kw)
         frame = next(gen)
         return frame
     except StopIteration:
@@ -75,7 +86,10 @@ def start_session(params: StartParams):
     algo_type = algo_meta.get("type", "search")
 
     if algo_type == "misc":
-        generator = algo_fn(params.num_items, seed=params.seed)
+        kw = {"seed": params.seed}
+        if params.init_data:
+            kw["init_data"] = params.init_data
+        generator = algo_fn(params.num_items, **kw)
     elif algo_type == "sort":
         # sort: data_condition と data を渡す (target は不要)
         generator = algo_fn(

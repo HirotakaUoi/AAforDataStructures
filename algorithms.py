@@ -87,11 +87,16 @@ def vector_capacity(n, scheme="double", **kwargs):
     scheme="fixed16" : 満杯になるたびに capacity を +16 ずつ拡張
     再確保時は旧配列・新配列を並列表示してコピーをアニメーション。
     """
-    N = max(4, min(int(n), 256))
-    seed_vals = [5, 2, 7, 1, 5, 10, 100, 25, 99,
-                 42, 77, 33, 88, 14, 61, 50]
-    push_vals = (seed_vals + [randint(1, 99)
-                              for _ in range(max(0, N - len(seed_vals)))])[:N]
+    init_data = kwargs.get("init_data")
+    if init_data and len(init_data) >= 1:
+        push_vals = [max(1, min(999, int(v))) for v in init_data]
+        N = len(push_vals)
+    else:
+        N = max(4, min(int(n), 256))
+        seed_vals = [5, 2, 7, 1, 5, 10, 100, 25, 99,
+                     42, 77, 33, 88, 14, 61, 50]
+        push_vals = (seed_vals + [randint(1, 99)
+                                  for _ in range(max(0, N - len(seed_vals)))])[:N]
 
     SCHEME_LABEL = "2倍拡張" if scheme == "double" else "固定+16拡張"
 
@@ -284,7 +289,11 @@ def vector_capacity_fixed16(n, **kwargs):
 def vector_ops(n, **kwargs):
     """Sample3_2: vector の push_back / erase / insert / reverse 操作列"""
     base = [{"message": "vector 操作列  (Sample3_2)", "color": "white"}]
-    v = [2, 3, 4, 5, 6]
+    init_data = kwargs.get("init_data")
+    if init_data and len(init_data) >= 1:
+        v = [max(1, min(999, int(x))) for x in init_data]
+    else:
+        v = [2, 3, 4, 5, 6]
 
     def frame(extra_hl=None, msg="", color="lightgreen", finished=False):
         return _f([_c("vec", list(v), f"vector  size={len(v)}", hl=extra_hl or {})],
@@ -333,9 +342,14 @@ def vector_ops(n, **kwargs):
 
 def iterator_sum3(n, **kwargs):
     """Sample3_3: イテレータで 3 要素ずつの合計を計算"""
-    N = max(6, min(int(n), 30))
-    rng = random.Random(kwargs.get("seed"))
-    data = [rng.randint(1, 99) for _ in range(N)]
+    init_data = kwargs.get("init_data")
+    if init_data and len(init_data) >= 1:
+        data = [max(1, min(999, int(x))) for x in init_data]
+        N = len(data)
+    else:
+        N = max(6, min(int(n), 30))
+        rng = random.Random(kwargs.get("seed"))
+        data = [rng.randint(1, 99) for _ in range(N)]
     base = [{"message": f"イテレータ: 3 要素ずつの合計  N={N}  (Sample3_3)", "color": "white"}]
 
     output = []
@@ -413,14 +427,19 @@ def iterator_sum3(n, **kwargs):
 
 def singly_linked_list(n, **kwargs):
     """Sample4_2: 片方向連結リストの操作 (add / addFirst / deleteFirst / deleteNode / find)"""
-    # データ数をメニュー設定に従わせる（表示しやすいサイズに制限）
-    N = max(4, min(int(n), 20))
-    data = [randint(1, 99) for _ in range(N)]
+    init_data = kwargs.get("init_data")
+    if init_data and len(init_data) >= 2:
+        data = [max(1, min(999, int(x))) for x in init_data]
+        N = len(data)
+    else:
+        # データ数をメニュー設定に従わせる（表示しやすいサイズに制限）
+        N = max(4, min(int(n), 20))
+        data = [randint(1, 99) for _ in range(N)]
     # 操作ターゲットをデータ内の値で確定（インデックスで選択 → 重複回避）
-    del1_v   = data[1]           # deleteNode 1回目
-    first_v  = randint(1, 99)    # addFirst に追加する値
-    find_v   = data[N // 2]      # find のターゲット（中央付近）
-    del2_v   = data[N - 2]       # deleteNode 2回目（末尾付近）
+    del1_v   = data[min(1, N - 1)]      # deleteNode 1回目
+    first_v  = randint(1, 99)           # addFirst に追加する値
+    find_v   = data[N // 2]             # find のターゲット（中央付近）
+    del2_v   = data[max(0, N - 2)]      # deleteNode 2回目（末尾付近）
 
     base = [{"message": f"片方向連結リスト  N={N}  (Sample4_2)", "color": "white"}]
     vals = []
@@ -489,9 +508,14 @@ def singly_linked_list(n, **kwargs):
 
 def singly_linked_list_avg4(n, **kwargs):
     """Sample4_7: 片方向連結リスト + イテレータで 4 要素ずつの平均を計算"""
-    N = max(4, min(int(n), 32))
-    rng = random.Random(kwargs.get("seed"))
-    data = [rng.randint(1, 99) for _ in range(N)]
+    init_data = kwargs.get("init_data")
+    if init_data and len(init_data) >= 1:
+        data = [max(1, min(999, int(x))) for x in init_data]
+        N = len(data)
+    else:
+        N = max(4, min(int(n), 32))
+        rng = random.Random(kwargs.get("seed"))
+        data = [rng.randint(1, 99) for _ in range(N)]
     base = [{"message": f"イテレータ: 4 要素ずつの平均  N={N}  (Sample4_7)", "color": "white"}]
 
     vals   = list(data)   # linked list の内容
@@ -578,6 +602,16 @@ def singly_linked_list_avg4(n, **kwargs):
 
 def doubly_linked_list(n, **kwargs):
     """Sample4_5: 双方向連結リストの操作 (add / deleteNode / addFirst / displayReverse / reverse)"""
+    init_data = kwargs.get("init_data")
+    if init_data and len(init_data) >= 2:
+        add_seq = [max(1, min(999, int(x))) for x in init_data]
+    else:
+        add_seq = [3, 8, 5, 4, 1]
+    # deleteNode ターゲット: デフォルト操作パターンに倣い 末尾→先頭 の順で削除
+    del1_v = add_seq[-1]
+    del2_v = add_seq[0]
+    add_first_v = 6   # addFirst で追加する固定値
+
     base = [{"message": "双方向連結リスト  (Sample4_5)", "color": "white"}]
     vals = []
 
@@ -601,24 +635,26 @@ def doubly_linked_list(n, **kwargs):
 
     yield frame(msg="双方向連結リスト生成 (空)")
 
-    # add: 3, 8, 5, 4, 1
-    for v in [3, 8, 5, 4, 1]:
+    # add: add_seq の要素を順に追加
+    for v in add_seq:
         vals.append(v)
         yield frame({len(vals) - 1: "yellow"}, msg=f"add({v})  →  {list(vals)}")
 
-    # deleteNode(1)
-    yield frame(msg="deleteNode(1): 値 1 を探索...")
-    yield from traverse_and_delete(1)
-    yield frame(msg=f"deleteNode(1) 完了  →  {list(vals)}")
+    # deleteNode(del1_v) — 末尾要素を削除
+    if del1_v in vals:
+        yield frame(msg=f"deleteNode({del1_v}): 値 {del1_v} を探索...")
+        yield from traverse_and_delete(del1_v)
+        yield frame(msg=f"deleteNode({del1_v}) 完了  →  {list(vals)}")
 
-    # deleteNode(3)
-    yield frame(msg="deleteNode(3): 値 3 を探索...")
-    yield from traverse_and_delete(3)
-    yield frame(msg=f"deleteNode(3) 完了  →  {list(vals)}")
+    # deleteNode(del2_v) — 先頭要素を削除（リストにまだあれば）
+    if del2_v in vals:
+        yield frame(msg=f"deleteNode({del2_v}): 値 {del2_v} を探索...")
+        yield from traverse_and_delete(del2_v)
+        yield frame(msg=f"deleteNode({del2_v}) 完了  →  {list(vals)}")
 
-    # addFirst(6)
-    vals.insert(0, 6)
-    yield frame({0: "yellow"}, msg=f"addFirst(6)  →  {list(vals)}")
+    # addFirst(add_first_v)
+    vals.insert(0, add_first_v)
+    yield frame({0: "yellow"}, msg=f"addFirst({add_first_v})  →  {list(vals)}")
 
     # display() — 先頭から順方向に走査
     yield frame(msg="display(): 先頭から順に走査 →")
@@ -2492,14 +2528,14 @@ def expression_tree(n, **kwargs):
 
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
-    ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
-    ("vector capacity – 固定+16拡張  (Ch.3)", vector_capacity_fixed16, {"type": "misc"}),
-    ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc"}),
-    ("イテレータ・3要素合計  (Ch.3)", iterator_sum3,      {"type": "misc"}),
+    ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc", "init_data": True}),
+    ("vector capacity – 固定+16拡張  (Ch.3)", vector_capacity_fixed16, {"type": "misc", "init_data": True}),
+    ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc", "init_data": True}),
+    ("イテレータ・3要素合計  (Ch.3)", iterator_sum3,      {"type": "misc", "init_data": True}),
     # ── Ch.4: 連結リスト ──
-    ("片方向連結リスト  (Ch.4)",              singly_linked_list,      {"type": "misc"}),
-    ("イテレータ・4要素平均  (Ch.4)",         singly_linked_list_avg4, {"type": "misc"}),
-    ("双方向連結リスト  (Ch.4)",              doubly_linked_list,      {"type": "misc"}),
+    ("片方向連結リスト  (Ch.4)",              singly_linked_list,      {"type": "misc", "init_data": True}),
+    ("イテレータ・4要素平均  (Ch.4)",         singly_linked_list_avg4, {"type": "misc", "init_data": True}),
+    ("双方向連結リスト  (Ch.4)",              doubly_linked_list,      {"type": "misc", "init_data": True}),
     # ── Ch.5: スタック / キュー / RPN ──
     ("連結リストスタック  (Ch.5)",  stack_linked_list,  {"type": "misc"}),
     ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc"}),
