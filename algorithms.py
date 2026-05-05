@@ -2528,8 +2528,8 @@ def expression_tree(n, **kwargs):
 
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
-    ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc", "init_data": True}),
-    ("vector capacity – 固定+16拡張  (Ch.3)", vector_capacity_fixed16, {"type": "misc", "init_data": True}),
+    ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
+    ("vector capacity – 固定+16拡張  (Ch.3)", vector_capacity_fixed16, {"type": "misc"}),
     ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc", "init_data": True}),
     ("イテレータ・3要素合計  (Ch.3)", iterator_sum3,      {"type": "misc", "init_data": True}),
     # ── Ch.4: 連結リスト ──
