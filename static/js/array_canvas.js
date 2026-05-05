@@ -756,7 +756,7 @@ class ArrayCanvas {
       ctx.textBaseline = "alphabetic";
 
       ctx.strokeStyle = isActive ? "#ffffff" : color;
-      ctx.lineWidth   = isActive ? 1.5 : 0.8;
+      ctx.lineWidth   = isActive ? 1.5 : 1;
       ctx.beginPath();
       ctx.moveTo(PAD_L + LBL_W + SEP_W, rowY + 3);
       ctx.lineTo(PAD_L + LBL_W + SEP_W, rowY + rowH - 3);
@@ -774,7 +774,7 @@ class ArrayCanvas {
         ctx.restore();
 
         ctx.strokeStyle = isLast ? _acTheme().cellText : color;
-        ctx.lineWidth   = isLast ? 1.5 : 0.8;
+        ctx.lineWidth   = isLast ? 1.5 : 1;
         ctx.strokeRect(cx + 0.5, rowY + 2.5, cellW - 1, rowH - 5);
 
         const fs = Math.max(7, Math.min(12, cellW * 0.44, (rowH - 4) * 0.55));
@@ -850,8 +850,8 @@ class ArrayCanvas {
 
       // 区切り線（ラベルの下）
       ctx.strokeStyle = isActive ? "#ffffff" : color;
-      ctx.lineWidth   = isActive ? 1.2 : 0.5;
-      ctx.globalAlpha = isActive ? 1.0 : 0.4;
+      ctx.lineWidth   = isActive ? 1.2 : 0.8;
+      ctx.globalAlpha = isActive ? 1.0 : 0.6;
       ctx.beginPath();
       ctx.moveTo(colX,          cellStartY);
       ctx.lineTo(colX + cellW,  cellStartY);
@@ -1619,7 +1619,7 @@ class ArrayCanvas {
 
       // 枠線
       ctx.strokeStyle = hlColor || (hasVal ? "#4472C4" : _acTheme().dimEdge);
-      ctx.lineWidth   = hlColor ? 2 : 0.8;
+      ctx.lineWidth   = hlColor ? 2 : 1;
       ctx.strokeRect(cellX + 0.5, cellY + 0.5, cellW - 1, cellH - 2);
 
       // 値
@@ -1737,7 +1737,7 @@ class ArrayCanvas {
         for (const ch of [nd.left, nd.right]) {
           if (!ch) continue;
           ctx.beginPath(); ctx.moveTo(nd._x, nd._y); ctx.lineTo(ch._x, ch._y);
-          ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 0.8; ctx.stroke();
+          ctx.strokeStyle = _acTheme().edgeColor; ctx.lineWidth = 1; ctx.stroke();
           drawE(ch);
         }
       };
@@ -1785,7 +1785,7 @@ class ArrayCanvas {
       }
       // セル枠
       ctx.strokeStyle = hl || (item ? "#4472C4" : _acTheme().dimEdge);
-      ctx.lineWidth   = hl ? 2 : 0.8;
+      ctx.lineWidth   = hl ? 2 : 1;
       this._rrect(ctx, CELL_X + 0.5, cellTopY + 0.5, CELL_W - 1, cellH - 1, 3); ctx.stroke();
 
       // インデックスラベル（左）
@@ -1918,7 +1918,7 @@ class ArrayCanvas {
       // 枠線
       seg();
       ctx.strokeStyle = hlColor || (isAct ? "#4472C4" : _acTheme().dimEdge);
-      ctx.lineWidth   = hlColor ? 2 : 0.8;
+      ctx.lineWidth   = hlColor ? 2 : 1;
       ctx.stroke();
 
       // 値テキスト（アクティブ or ハイライトのみ）
@@ -2396,7 +2396,7 @@ class ArrayCanvas {
       }
 
       ctx.strokeStyle = hl ? hl : (isAct ? "#ffcc44" : (slot.key !== null ? "#4472C4" : _acTheme().dimEdge));
-      ctx.lineWidth   = (hl || isAct) ? 2 : 0.8;
+      ctx.lineWidth   = (hl || isAct) ? 2 : 1;
       ctx.strokeRect(startX + 0.5, cellY + 0.5, cellW - 1, cellH - 2);
 
       if (slot.key !== null) {
@@ -2436,7 +2436,7 @@ class ArrayCanvas {
           ctx.fillStyle = _acTheme().cellBg;
           ctx.fillRect(cx, cellY + 1, chainCellW, cellH - 3);
           ctx.strokeStyle = (slot.chainHL && slot.chainHL[j]) ? slot.chainHL[j] : "#4472C4";
-          ctx.lineWidth = (slot.chainHL && slot.chainHL[j]) ? 2 : 0.8;
+          ctx.lineWidth = (slot.chainHL && slot.chainHL[j]) ? 2 : 1;
           ctx.strokeRect(cx + 0.5, cellY + 1.5, chainCellW - 1, cellH - 4);
 
           const fs2 = Math.max(7, Math.min(11, chainCellW * 0.42));
@@ -2563,7 +2563,7 @@ class ArrayCanvas {
 
         // 枠線
         ctx.strokeStyle = hl || "#4472C4";
-        ctx.lineWidth   = hl ? 2 : 0.8;
+        ctx.lineWidth   = hl ? 2 : 1;
         ctx.strokeRect(cx + 0.5, ny + 0.5, CELL_W - 2, NODE_H - 1);
 
         // キー値

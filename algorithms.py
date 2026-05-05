@@ -348,51 +348,62 @@ def iterator_sum3(n, **kwargs):
         return _c("output", list(output), f"Output  ({len(output)} 要素)",
                   hl=out_hl, weight=1.0)
 
-    def sum_c(val, hl_color=None):
-        """sum 専用セル。hl_color=None のとき非活性（ハイライトなし）。"""
-        return _c("sum_cell", [val], "sum",
-                  hl={0: hl_color} if hl_color else None, weight=0.5)
+    def vars_obj(sum_val, count_val, sum_hl=None, count_hl=None):
+        """sum と count を 2 セルで並べて表示"""
+        hl = {}
+        if sum_hl:   hl[0] = sum_hl
+        if count_hl: hl[1] = count_hl
+        return _c("vars_cell", [sum_val, count_val], "sum  /  count",
+                  hl=hl or None, weight=0.45)
 
-    def mk(head, sum_val, sum_hl=None, out_hl=None, extra=None, finished=False):
+    def mk(head, sum_val=0, count_val=0, sum_hl=None, count_hl=None,
+           sum_mode=False, out_hl=None, extra=None, finished=False):
+        if sum_mode:
+            var_c = _c("vars_cell", [sum_val], "sum",
+                       hl={0: "cyan"}, weight=0.45)
+        else:
+            var_c = vars_obj(sum_val, count_val, sum_hl, count_hl)
         return _f([
             _tape("input", data, head, "Input", weight=1.5),
-            sum_c(sum_val, sum_hl),
+            var_c,
             out_c(out_hl),
         ], base + (extra or []), finished=finished)
 
     # 初期フレーム
-    yield mk(0, 0)
+    yield mk(0)
 
     while i < N:
         grp = [i + k for k in range(3) if i + k < N]
 
-        # テープを 1 要素ずつスキャンしながら sum セルに部分和を表示
+        # テープを 1 要素ずつスキャンしながら sum/count セルを更新
         partial = 0
         for step, idx in enumerate(grp):
             partial += data[idx]
-            yield mk(idx, partial, sum_hl="yellow",
-                     extra=[{"message": f"it → data[{idx}] = {data[idx]}  ({step+1}/{len(grp)})  sum = {partial}",
-                              "color": "lightgreen"}])
+            cnt = step + 1
+            yield mk(idx, partial, cnt, sum_hl="yellow", count_hl="yellow",
+                     extra=[{"message": f"it → data[{idx}] = {data[idx]}  ({cnt}/{len(grp)})  sum = {partial}",
+                             "color": "lightgreen"}])
 
         s = partial
         output.append(s)
 
-        # グループ完了: sum セルをシアンで強調、output の末尾を黄色で確定表示
-        yield mk(grp[-1], s, sum_hl="cyan",
+        # グループ完了: vars セルを sum 単体に差し替え、output 末尾を黄色で確定
+        sum_str = " + ".join(str(data[j]) for j in grp)
+        yield mk(grp[-1], s, sum_mode=True,
                  out_hl={len(output) - 1: "#ffff44"},
-                 extra=[{"message": f"sum = {' + '.join(str(data[j]) for j in grp)} = {s}",
+                 extra=[{"message": f"sum = {sum_str} = {s}  count = {len(grp)}",
                          "color": "cyan"}])
 
-        # sum セルをリセット（次のグループへ）
+        # sum/count セルをリセット（次のグループへ）
         if i + len(grp) < N:
-            yield mk(grp[-1], 0,
+            yield mk(grp[-1],
                      out_hl={len(output) - 1: "#44aa44"},
                      extra=[{"message": f"{len(output)} 個の合計を計算済み", "color": "#44aa44"}])
 
         i += len(grp)
 
     # 完了フレーム
-    yield mk(N - 1, s, sum_hl="#44aa44", finished=True,
+    yield mk(N - 1, s, sum_mode=True, finished=True,
              extra=[{"message": f"完了: {len(output)} 個の合計を計算", "color": "#44aa44"}])
 
 
