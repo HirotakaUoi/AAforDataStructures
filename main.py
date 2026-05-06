@@ -49,11 +49,12 @@ class StartParams(BaseModel):
     data_condition: int   = 0         # 0=ランダム 1=昇順 2=降順 3=ほぼ昇順 (sort 用)
     seed:           Optional[int] = None        # 乱数シード (graph 等)
     init_data:      Optional[list[int]] = None  # ユーザー指定の初期配列 (misc init_data 対応アルゴ用)
+    ops:            Optional[list[str]] = None  # ユーザー指定の操作列 (misc ops 対応アルゴ用)
 
 
 @app.get("/api/preview")
 def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None,
-                init_data: Optional[str] = None):
+                init_data: Optional[str] = None, ops: Optional[str] = None):
     """ジェネレータの第1フレームだけ返す（実行前プレビュー用）"""
     if algorithm_id not in range(len(AlgorithmList)):
         return JSONResponse({"error": "invalid algorithm_id"}, status_code=400)
@@ -68,6 +69,12 @@ def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None,
                     kw["init_data"] = parsed
             except ValueError:
                 pass
+        if ops:
+            # 改行またはセミコロン区切りの操作列文字列をリストに変換
+            import re as _re
+            op_list = [s.strip() for s in _re.split(r"[\n;]+", ops.strip()) if s.strip()]
+            if op_list:
+                kw["ops"] = op_list
         gen = algo_fn(n, **kw)
         frame = next(gen)
         return frame
@@ -89,6 +96,8 @@ def start_session(params: StartParams):
         kw = {"seed": params.seed}
         if params.init_data:
             kw["init_data"] = params.init_data
+        if params.ops:
+            kw["ops"] = params.ops
         generator = algo_fn(params.num_items, **kw)
     elif algo_type == "sort":
         # sort: data_condition と data を渡す (target は不要)

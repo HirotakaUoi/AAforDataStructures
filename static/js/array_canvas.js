@@ -129,6 +129,7 @@ class ArrayCanvas {
           case "graph_view":  this._drawGraphView(obj, areaY, eachH);  break;
           case "hash_table":  this._drawHashTable(obj, areaY, eachH);  break;
           case "btree_view":  this._drawBtreeView(obj, areaY, eachH);  break;
+          case "op_list":     this._drawOpList(obj, areaY, eachH);     break;
         }
         areaY += eachH;
       }
@@ -2580,6 +2581,96 @@ class ArrayCanvas {
       }
     }
     drawNode(root);
+
+    ctx.restore();
+  }
+
+  // ── op_list – 操作リスト表示 ──────────────────────────────────────────
+  _drawOpList(obj, areaY, areaH) {
+    const ctx  = this.ctx;
+    const cw   = this.cw;
+    const th   = _acTheme();
+    const ops  = obj.ops || [];
+    if (ops.length === 0) return;
+
+    const curIdx = obj.current_idx ?? -1;   // 現在実行中の操作インデックス
+    const padX   = 12;
+    const padY   = 6;
+
+    ctx.save();
+
+    // ─── 背景 ───────────────────────────────────────────────────────────
+    ctx.fillStyle = th.canvasBg;
+    ctx.fillRect(0, areaY, cw, areaH);
+
+    // ─── ラベル ──────────────────────────────────────────────────────────
+    const labelH  = 18;
+    const label   = obj.label || "操作列";
+    ctx.font      = `bold 11px sans-serif`;
+    ctx.fillStyle = th.labelColor;
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, padX, areaY + padY + labelH / 2);
+
+    // ─── 区切り線 ────────────────────────────────────────────────────────
+    const lineY = areaY + padY + labelH + 2;
+    ctx.strokeStyle = th.edgeColor;
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX, lineY);
+    ctx.lineTo(cw - padX, lineY);
+    ctx.stroke();
+
+    // ─── アイテム描画 ────────────────────────────────────────────────────
+    const listY  = lineY + 4;
+    const listH  = areaH - (listY - areaY) - padY;
+    const itemH  = Math.min(22, listH / ops.length);
+    const fsize  = Math.max(9, Math.min(13, itemH * 0.72));
+
+    // 表示ウィンドウ: 全部入りきらない場合は current 付近を中心に表示
+    const maxVisible = Math.floor(listH / itemH);
+    let startIdx = 0;
+    if (ops.length > maxVisible && curIdx >= 0) {
+      startIdx = Math.max(0, Math.min(curIdx - Math.floor(maxVisible / 2),
+                                      ops.length - maxVisible));
+    }
+
+    ctx.font = `${fsize}px monospace`;
+
+    for (let i = startIdx; i < ops.length; i++) {
+      const iy = listY + (i - startIdx) * itemH;
+      if (iy + itemH > areaY + areaH - padY) break;
+
+      const isCurrent = (i === curIdx);
+      const isDone    = (i < curIdx);
+
+      // 現在行ハイライト背景
+      if (isCurrent) {
+        ctx.fillStyle = "rgba(255, 220, 0, 0.15)";
+        ctx.fillRect(2, iy, cw - 4, itemH);
+      }
+
+      // テキスト色・マーカー
+      if (isCurrent) {
+        ctx.fillStyle = "#ffdd44";
+      } else if (isDone) {
+        ctx.fillStyle = "#44aa44";
+      } else {
+        ctx.fillStyle = th.labelColor;
+      }
+
+      ctx.textBaseline = "middle";
+      const marker = isCurrent ? "▶" : (isDone ? "✓" : "·");
+      const numStr = String(i + 1).padStart(2, " ");
+      ctx.fillText(`${marker} ${numStr}. ${ops[i]}`, padX, iy + itemH / 2);
+    }
+
+    // スクロール省略インジケータ
+    if (startIdx > 0) {
+      ctx.fillStyle = th.labelColor;
+      ctx.font      = `10px sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.fillText(`… (${startIdx} 件省略)`, padX, listY - 8);
+    }
 
     ctx.restore();
   }

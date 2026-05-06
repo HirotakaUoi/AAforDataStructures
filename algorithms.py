@@ -77,6 +77,54 @@ def _queue_circ(id, values, front, back, count, label="", hl=None, weight=1):
     }
 
 
+# ---------------------------------------------------------------------------
+# 操作列ヘルパー (vector_ops / singly_linked_list / doubly_linked_list 共用)
+# ---------------------------------------------------------------------------
+
+def _op_list_obj(ops_labels, current_idx, weight=1.2):
+    """操作列を表示する op_list オブジェクトを生成する"""
+    return {
+        "id":          "oplist",
+        "type":        "op_list",
+        "ops":         list(ops_labels),
+        "current_idx": current_idx,
+        "label":       "操作列",
+        "weight":      weight,
+    }
+
+def _parse_op_list(ops_strs):
+    """文字列リスト ["add(5)", "deleteNode(3)"] → [{"op":..., "args":..., "display":...}]"""
+    import re as _re
+    result = []
+    for s in ops_strs:
+        s = s.strip()
+        if not s or s.startswith("#"):
+            continue
+        m = _re.match(r'(\w+)\s*\(([^)]*)\)', s)
+        if m:
+            name     = m.group(1)
+            args_str = m.group(2).strip()
+            args     = []
+            for tok in (args_str.split(",") if args_str else []):
+                tok = tok.strip()
+                if tok:
+                    try:
+                        args.append(int(tok))
+                    except ValueError:
+                        args.append(tok)   # 文字列引数 ("end" など)
+        else:
+            parts = s.split()
+            name  = parts[0]
+            args  = []
+            for tok in parts[1:]:
+                try:
+                    args.append(int(tok))
+                except ValueError:
+                    args.append(tok)
+        result.append({"op": name, "args": args, "display": s})
+    return result
+
+
 # ===========================================================================
 # Ch.3: vector / イテレータ (type: "misc")
 # ===========================================================================
@@ -95,7 +143,8 @@ def vector_capacity(n, scheme="double", **kwargs):
         N = max(4, min(int(n), 256))
         seed_vals = [5, 2, 7, 1, 5, 10, 100, 25, 99,
                      42, 77, 33, 88, 14, 61, 50]
-        push_vals = (seed_vals + [randint(1, 99)
+        _rng_cap = random.Random(kwargs.get("seed", 0))
+        push_vals = (seed_vals + [_rng_cap.randint(1, 99)
                                   for _ in range(max(0, N - len(seed_vals)))])[:N]
 
     SCHEME_LABEL = "2倍拡張" if scheme == "double" else "固定+16拡張"
@@ -287,57 +336,106 @@ def vector_capacity_fixed16(n, **kwargs):
 
 
 def vector_ops(n, **kwargs):
-    """Sample3_2: vector の push_back / erase / insert / reverse 操作列"""
-    base = [{"message": "vector 操作列  (Sample3_2)", "color": "white"}]
+    """Sample3_2: vector の push_back / erase / insert / find_erase / reverse 操作列
+    ユーザーが操作列を指定可能 (ops kwarg)。デフォルトは従来の固定シーケンス。
+    利用可能操作: push_back(x) / erase(i) / insert(i,x) / find_erase(x) / reverse()
+    """
+    base      = [{"message": "vector 操作列  (Sample3_2)", "color": "white"}]
     init_data = kwargs.get("init_data")
+    ops_strs  = kwargs.get("ops")
+
     if init_data and len(init_data) >= 1:
         v = [max(1, min(999, int(x))) for x in init_data]
     else:
         v = [2, 3, 4, 5, 6]
 
-    def frame(extra_hl=None, msg="", color="lightgreen", finished=False):
-        return _f([_c("vec", list(v), f"vector  size={len(v)}", hl=extra_hl or {})],
-                  base + [{"message": msg, "color": color}], finished=finished)
+    # 操作列の組み立て
+    if ops_strs:
+        ops = _parse_op_list(ops_strs)
+    else:
+        ops = [
+            {"op": "push_back",  "args": [2],    "display": "push_back(2)"},
+            {"op": "push_back",  "args": [7],    "display": "push_back(7)"},
+            {"op": "push_back",  "args": [1],    "display": "push_back(1)"},
+            {"op": "push_back",  "args": [5],    "display": "push_back(5)"},
+            {"op": "push_back",  "args": [3],    "display": "push_back(3)"},
+            {"op": "find_erase", "args": [5],    "display": "erase(find(5))"},
+            {"op": "insert",     "args": [0, 4], "display": "insert(0, 4)"},
+            {"op": "insert",     "args": [2, 6], "display": "insert(2, 6)"},
+            {"op": "push_back",  "args": [10],   "display": "push_back(10)"},
+            {"op": "erase",      "args": [3],    "display": "erase(3)"},
+            {"op": "reverse",    "args": [],     "display": "reverse()"},
+        ]
 
-    yield frame(msg=f"初期状態: {list(v)}")
+    ops_labels = [op["display"] for op in ops]
+    total      = len(ops)
 
-    # push_back × 5
-    for val in [2, 7, 1, 5, 3]:
-        v.append(val)
-        yield frame({len(v) - 1: "yellow"}, msg=f"push_back({val})  →  size={len(v)}")
+    def mk_frame(hl=None, op_idx=-1, msg="", color="lightgreen",
+                 finished=False, extra_objs=None):
+        vec_obj = _c("vec", list(v), f"vector  size={len(v)}", hl=hl or {}, weight=2)
+        ol_obj  = _op_list_obj(ops_labels, op_idx, weight=1.2)
+        objs    = (extra_objs + [ol_obj]) if extra_objs else [vec_obj, ol_obj]
+        return _f(objs, base + ([{"message": msg, "color": color}] if msg else []),
+                  finished=finished)
 
-    # erase(find(5)) — 最初の 5 を検索して削除
-    idx = v.index(5)
-    yield frame({idx: "yellow"}, msg=f"find(5) → index={idx},  v[{idx}]={v[idx]}")
-    yield frame({idx: "#ff4444"}, msg=f"erase(find(5)): v[{idx}]={v[idx]} を削除", color="orange")
-    v.pop(idx)
-    yield frame(msg=f"erase 後: {list(v)}")
+    # 初期フレーム: 初期状態 + 操作列全体を提示
+    yield mk_frame(op_idx=-1, msg=f"初期状態: {list(v)}")
 
-    # insert(begin, 4) — 先頭に 4
-    v.insert(0, 4)
-    yield frame({0: "yellow"}, msg=f"insert(begin, 4): 先頭に 4 を挿入")
+    for i, op in enumerate(ops):
+        name = op["op"]
+        args = op["args"]
 
-    # insert(begin+2, 6) — index 2 に 6
-    v.insert(2, 6)
-    yield frame({2: "yellow"}, msg=f"insert(begin+2, 6): index=2 に 6 を挿入")
+        if name == "push_back":
+            x = args[0] if args else 0
+            v.append(x)
+            yield mk_frame({len(v)-1: "yellow"}, op_idx=i,
+                           msg=f"push_back({x})  →  size={len(v)}")
 
-    # insert(end, 10) — 末尾に 10
-    v.append(10)
-    yield frame({len(v) - 1: "yellow"}, msg=f"insert(end, 10): 末尾に 10 を挿入")
+        elif name == "erase":
+            idx = args[0] if args else 0
+            if 0 <= idx < len(v):
+                yield mk_frame({idx: "#ff4444"}, op_idx=i,
+                               msg=f"erase({idx}): v[{idx}]={v[idx]} を削除", color="orange")
+                v.pop(idx)
+                yield mk_frame(op_idx=i, msg=f"erase 後: {list(v)}")
+            else:
+                yield mk_frame(op_idx=i, msg=f"erase({idx}): インデックスが範囲外", color="orange")
 
-    # erase(begin+3) — index 3 を削除
-    yield frame({3: "#ff4444"}, msg=f"erase(begin+3): v[3]={v[3]} を削除", color="orange")
-    v.pop(3)
-    yield frame(msg=f"erase 後: {list(v)}")
+        elif name == "find_erase":
+            x = args[0] if args else 0
+            if x in v:
+                idx = v.index(x)
+                yield mk_frame({idx: "yellow"}, op_idx=i,
+                               msg=f"find({x}) → index={idx}")
+                yield mk_frame({idx: "#ff4444"}, op_idx=i,
+                               msg=f"erase(find({x})): v[{idx}]={v[idx]} を削除", color="orange")
+                v.pop(idx)
+                yield mk_frame(op_idx=i, msg=f"erase 後: {list(v)}")
+            else:
+                yield mk_frame(op_idx=i, msg=f"find({x}): 値が見つからない", color="orange")
 
-    # t = copy of v; t.reverse()
-    t = list(v)
-    t.reverse()
-    yield _f([_c("vec", list(v), "vector v"),
-              _c("rev", t, "vector t  (reverse後)",
-                 hl={i: "#4488ff" for i in range(len(t))})],
-             base + [{"message": f"t = v をコピーして t.reverse()  →  {t}", "color": "cyan"}],
-             finished=True)
+        elif name == "insert":
+            if len(args) >= 2:
+                idx, x = args[0], args[1]
+            else:
+                idx, x = 0, (args[0] if args else 0)
+            idx = max(0, min(idx, len(v)))
+            v.insert(idx, x)
+            yield mk_frame({idx: "yellow"}, op_idx=i,
+                           msg=f"insert({idx}, {x}): index={idx} に {x} を挿入")
+
+        elif name == "reverse":
+            t = list(v); t.reverse()
+            yield mk_frame(
+                op_idx=i,
+                extra_objs=[
+                    _c("vec", list(v), "vector v",                 weight=1.5),
+                    _c("rev", t,       "vector t  (reverse後)",
+                       hl={j: "#4488ff" for j in range(len(t))},   weight=1.5),
+                ],
+                msg=f"t = v をコピーして t.reverse()  →  {t}", color="cyan")
+
+    yield mk_frame(op_idx=total, msg="完了", color="#44aa44", finished=True)
 
 
 def iterator_sum3(n, **kwargs):
@@ -426,84 +524,134 @@ def iterator_sum3(n, **kwargs):
 # ===========================================================================
 
 def singly_linked_list(n, **kwargs):
-    """Sample4_2: 片方向連結リストの操作 (add / addFirst / deleteFirst / deleteNode / find)"""
+    """Sample4_2: 片方向連結リストの操作 (add / addFirst / deleteFirst / deleteNode / find)
+    ユーザーが操作列を指定可能 (ops kwarg)。デフォルトは従来の固定シーケンス。
+    利用可能操作: add(x) / addFirst(x) / deleteFirst() / deleteNode(x) / find(x)
+    """
     init_data = kwargs.get("init_data")
+    ops_strs  = kwargs.get("ops")
+    _rng      = random.Random(kwargs.get("seed", 0))
+
     if init_data and len(init_data) >= 2:
         data = [max(1, min(999, int(x))) for x in init_data]
-        N = len(data)
+        N    = len(data)
     else:
-        # データ数をメニュー設定に従わせる（表示しやすいサイズに制限）
-        N = max(4, min(int(n), 20))
-        data = [randint(1, 99) for _ in range(N)]
-    # 操作ターゲットをデータ内の値で確定（インデックスで選択 → 重複回避）
-    del1_v   = data[min(1, N - 1)]      # deleteNode 1回目
-    first_v  = randint(1, 99)           # addFirst に追加する値
-    find_v   = data[N // 2]             # find のターゲット（中央付近）
-    del2_v   = data[max(0, N - 2)]      # deleteNode 2回目（末尾付近）
+        N    = max(4, min(int(n), 20))
+        data = [_rng.randint(1, 99) for _ in range(N)]
 
-    base = [{"message": f"片方向連結リスト  N={N}  (Sample4_2)", "color": "white"}]
-    vals = []
+    # 操作列の組み立て
+    if ops_strs:
+        ops = _parse_op_list(ops_strs)
+    else:
+        del1_v  = data[min(1, N - 1)]
+        first_v = _rng.randint(1, 99)
+        find_v  = data[N // 2]
+        del2_v  = data[max(0, N - 2)]
+        ops = (
+            [{"op": "add", "args": [v], "display": f"add({v})"} for v in data]
+            + [
+                {"op": "deleteNode",  "args": [del1_v],  "display": f"deleteNode({del1_v})"},
+                {"op": "addFirst",    "args": [first_v], "display": f"addFirst({first_v})"},
+                {"op": "deleteFirst", "args": [],        "display": "deleteFirst()"},
+                {"op": "find",        "args": [find_v],  "display": f"find({find_v})"},
+                {"op": "deleteNode",  "args": [del2_v],  "display": f"deleteNode({del2_v})"},
+            ]
+        )
 
-    def frame(extra_hl=None, msg="", color="lightgreen", finished=False):
-        nodes = list(vals) if vals else []
-        return _f([_ll("list", nodes, "Singly Linked List", hl=extra_hl or {}, is_doubly=False)],
-                  base + [{"message": msg, "color": color}], finished=finished,
-                  text_position="bottom")
+    base       = [{"message": "片方向連結リスト  (Sample4_2)", "color": "white"}]
+    ops_labels = [op["display"] for op in ops]
+    total      = len(ops)
+    vals       = []
 
-    def traverse_and_delete(target):
+    def mk_frame(hl=None, op_idx=-1, msg="", color="lightgreen", finished=False):
+        ll_obj = _ll("list", list(vals), f"Singly Linked List  (size={len(vals)})",
+                     hl=hl or {}, is_doubly=False, weight=2)
+        ol_obj = _op_list_obj(ops_labels, op_idx, weight=1.2)
+        return _f([ll_obj, ol_obj],
+                  base + ([{"message": msg, "color": color}] if msg else []),
+                  finished=finished, text_position="bottom")
+
+    def _delete_traverse_frames(target, op_idx):
+        """値 target を線形探索して削除するフレーム列を yield"""
         idx = vals.index(target)
-        for i in range(idx + 1):
-            found = (vals[i] == target)
-            h = {i: "#ff4444" if found else "yellow"}
-            yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
-                     base + [{"message": f"[{i}] = {vals[i]}  {'→ 削除!' if found else '→ 次へ'}",
+        for j in range(idx + 1):
+            found = (vals[j] == target)
+            hl    = {j: "#ff4444" if found else "yellow"}
+            ll_hl = _ll("list", list(vals), f"Singly Linked List  (size={len(vals)})",
+                        hl=hl, is_doubly=False, weight=2)
+            yield _f([ll_hl, _op_list_obj(ops_labels, op_idx, weight=1.2)],
+                     base + [{"message": f"[{j}] = {vals[j]}  {'→ 削除!' if found else '→ 次へ'}",
                               "color": "red" if found else "lightgreen"}],
                      text_position="bottom")
         vals.pop(idx)
 
-    yield frame(msg="連結リスト生成 (空)")
+    # 初期フレーム: 空リスト + 操作列全体を提示
+    yield mk_frame(op_idx=-1, msg="連結リスト生成 (空)")
 
-    # add N 個の値
-    for v in data:
-        vals.append(v)
-        yield frame({len(vals) - 1: "yellow"}, msg=f"add({v})  →  size={len(vals)}")
+    for i, op in enumerate(ops):
+        name = op["op"]
+        args = op["args"]
 
-    # deleteNode(del1_v)
-    yield frame(msg=f"deleteNode({del1_v}): 値 {del1_v} を線形探索...")
-    yield from traverse_and_delete(del1_v)
-    yield frame(msg=f"deleteNode({del1_v}) 完了  →  size={len(vals)}")
+        if name == "add":
+            x = args[0] if args else 0
+            vals.append(x)
+            yield mk_frame({len(vals)-1: "yellow"}, op_idx=i,
+                           msg=f"add({x})  →  size={len(vals)}")
 
-    # addFirst(first_v)
-    vals.insert(0, first_v)
-    yield frame({0: "yellow"}, msg=f"addFirst({first_v})  →  size={len(vals)}")
+        elif name == "addFirst":
+            x = args[0] if args else 0
+            vals.insert(0, x)
+            yield mk_frame({0: "yellow"}, op_idx=i,
+                           msg=f"addFirst({x})  →  size={len(vals)}")
 
-    # deleteFirst()
-    old_first = vals[0]
-    yield _f([_ll("list", list(vals), "Singly Linked List", hl={0: "#ff4444"})],
-             base + [{"message": f"deleteFirst(): 先頭 {old_first} を削除", "color": "orange"}],
-             text_position="bottom")
-    vals.pop(0)
-    yield frame(msg=f"deleteFirst() 完了  →  先頭={vals[0]}")
+        elif name == "deleteFirst":
+            if not vals:
+                yield mk_frame(op_idx=i, msg="deleteFirst(): リストが空", color="orange")
+            else:
+                old = vals[0]
+                ll_hl = _ll("list", list(vals), f"Singly Linked List  (size={len(vals)})",
+                            hl={0: "#ff4444"}, is_doubly=False, weight=2)
+                yield _f([ll_hl, _op_list_obj(ops_labels, i, weight=1.2)],
+                         base + [{"message": f"deleteFirst(): 先頭 {old} を削除",
+                                  "color": "orange"}],
+                         text_position="bottom")
+                vals.pop(0)
+                head_str = f"  先頭={vals[0]}" if vals else ""
+                yield mk_frame(op_idx=i,
+                               msg=f"deleteFirst() 完了  →  size={len(vals)}{head_str}")
 
-    # find(find_v)
-    yield frame(msg=f"find({find_v}): 線形探索...")
-    for i in range(len(vals)):
-        found = (vals[i] == find_v)
-        h = {i: "#ff4444" if found else "yellow"}
-        yield _f([_ll("list", list(vals), "Singly Linked List", hl=h)],
-                 base + [{"message": f"[{i}] = {vals[i]}  {'→ 発見!' if found else '→ 次へ'}",
-                          "color": "red" if found else "lightgreen"}],
-                 text_position="bottom")
-        if found:
-            break
+        elif name == "deleteNode":
+            x = args[0] if args else 0
+            if x not in vals:
+                yield mk_frame(op_idx=i, msg=f"deleteNode({x}): 値 {x} は存在しない",
+                               color="orange")
+            else:
+                yield mk_frame(op_idx=i, msg=f"deleteNode({x}): 値 {x} を線形探索...")
+                yield from _delete_traverse_frames(x, i)
+                yield mk_frame(op_idx=i,
+                               msg=f"deleteNode({x}) 完了  →  size={len(vals)}")
 
-    # deleteNode(del2_v) ― まだリストに残っている場合のみ
-    if del2_v in vals:
-        yield frame(msg=f"deleteNode({del2_v}): 値 {del2_v} を線形探索...")
-        yield from traverse_and_delete(del2_v)
-        yield frame(msg=f"deleteNode({del2_v}) 完了  →  size={len(vals)}")
+        elif name == "find":
+            x = args[0] if args else 0
+            yield mk_frame(op_idx=i, msg=f"find({x}): 線形探索...")
+            found_flag = False
+            for j in range(len(vals)):
+                found = (vals[j] == x)
+                hl    = {j: "#ff4444" if found else "yellow"}
+                ll_hl = _ll("list", list(vals), f"Singly Linked List  (size={len(vals)})",
+                            hl=hl, is_doubly=False, weight=2)
+                yield _f([ll_hl, _op_list_obj(ops_labels, i, weight=1.2)],
+                         base + [{"message": f"[{j}] = {vals[j]}  {'→ 発見!' if found else '→ 次へ'}",
+                                  "color": "red" if found else "lightgreen"}],
+                         text_position="bottom")
+                if found:
+                    found_flag = True
+                    break
+            if not found_flag:
+                yield mk_frame(op_idx=i, msg=f"find({x}): 見つからなかった", color="orange")
 
-    yield frame(msg=f"全操作完了  size={len(vals)}", finished=True)
+    yield mk_frame(op_idx=total, msg=f"全操作完了  size={len(vals)}",
+                   color="#44aa44", finished=True)
 
 
 def singly_linked_list_avg4(n, **kwargs):
@@ -601,88 +749,129 @@ def singly_linked_list_avg4(n, **kwargs):
 
 
 def doubly_linked_list(n, **kwargs):
-    """Sample4_5: 双方向連結リストの操作 (add / deleteNode / addFirst / displayReverse / reverse)"""
+    """Sample4_5: 双方向連結リストの操作 (add / addFirst / deleteNode / display / displayReverse / reverse)
+    ユーザーが操作列を指定可能 (ops kwarg)。デフォルトは従来の固定シーケンス。
+    利用可能操作: add(x) / addFirst(x) / deleteNode(x) / display() / displayReverse() / reverse()
+    """
     init_data = kwargs.get("init_data")
-    if init_data and len(init_data) >= 2:
-        add_seq = [max(1, min(999, int(x))) for x in init_data]
+    ops_strs  = kwargs.get("ops")
+
+    if ops_strs is None:
+        # デフォルト操作列を構築
+        if init_data and len(init_data) >= 2:
+            add_seq = [max(1, min(999, int(x))) for x in init_data]
+        else:
+            add_seq = [3, 8, 5, 4, 1]
+        del1_v      = add_seq[-1]
+        del2_v      = add_seq[0]
+        add_first_v = 6
+        ops = (
+            [{"op": "add",    "args": [v], "display": f"add({v})"} for v in add_seq]
+            + [
+                {"op": "deleteNode",    "args": [del1_v],      "display": f"deleteNode({del1_v})"},
+                {"op": "deleteNode",    "args": [del2_v],      "display": f"deleteNode({del2_v})"},
+                {"op": "addFirst",      "args": [add_first_v], "display": f"addFirst({add_first_v})"},
+                {"op": "display",       "args": [],            "display": "display()"},
+                {"op": "displayReverse","args": [],            "display": "displayReverse()"},
+                {"op": "reverse",       "args": [],            "display": "reverse()"},
+            ]
+        )
     else:
-        add_seq = [3, 8, 5, 4, 1]
-    # deleteNode ターゲット: デフォルト操作パターンに倣い 末尾→先頭 の順で削除
-    del1_v = add_seq[-1]
-    del2_v = add_seq[0]
-    add_first_v = 6   # addFirst で追加する固定値
+        ops = _parse_op_list(ops_strs)
 
-    base = [{"message": "双方向連結リスト  (Sample4_5)", "color": "white"}]
-    vals = []
+    base       = [{"message": "双方向連結リスト  (Sample4_5)", "color": "white"}]
+    ops_labels = [op["display"] for op in ops]
+    total      = len(ops)
+    vals       = []
 
-    def frame(extra_hl=None, msg="", color="lightgreen", finished=False, objs=None):
-        if objs is None:
-            nodes = list(vals) if vals else []
-            objs = [_ll("list", nodes, "Doubly Linked List", hl=extra_hl or {}, is_doubly=True)]
-        return _f(objs, base + [{"message": msg, "color": color}], finished=finished,
-                  text_position="bottom")
+    def mk_frame(hl=None, op_idx=-1, msg="", color="lightgreen", finished=False):
+        ll_obj = _ll("list", list(vals), f"Doubly Linked List  (size={len(vals)})",
+                     hl=hl or {}, is_doubly=True, weight=2)
+        ol_obj = _op_list_obj(ops_labels, op_idx, weight=1.2)
+        return _f([ll_obj, ol_obj],
+                  base + ([{"message": msg, "color": color}] if msg else []),
+                  finished=finished, text_position="bottom")
 
-    def traverse_and_delete(target):
+    def _delete_traverse_frames(target, op_idx):
+        """値 target を線形探索して削除するフレーム列を yield"""
         idx = vals.index(target)
-        for i in range(idx + 1):
-            found = (vals[i] == target)
-            h = {i: "#ff4444" if found else "yellow"}
-            yield _f([_ll("list", list(vals), "Doubly Linked List", hl=h, is_doubly=True)],
-                     base + [{"message": f"[{i}] = {vals[i]}  {'→ 削除!' if found else '→ 次へ'}",
+        for j in range(idx + 1):
+            found = (vals[j] == target)
+            hl    = {j: "#ff4444" if found else "yellow"}
+            ll_hl = _ll("list", list(vals), f"Doubly Linked List  (size={len(vals)})",
+                        hl=hl, is_doubly=True, weight=2)
+            yield _f([ll_hl, _op_list_obj(ops_labels, op_idx, weight=1.2)],
+                     base + [{"message": f"[{j}] = {vals[j]}  {'→ 削除!' if found else '→ 次へ'}",
                               "color": "red" if found else "lightgreen"}],
                      text_position="bottom")
         vals.pop(idx)
 
-    yield frame(msg="双方向連結リスト生成 (空)")
+    # 初期フレーム: 空リスト + 操作列全体を提示
+    yield mk_frame(op_idx=-1, msg="双方向連結リスト生成 (空)")
 
-    # add: add_seq の要素を順に追加
-    for v in add_seq:
-        vals.append(v)
-        yield frame({len(vals) - 1: "yellow"}, msg=f"add({v})  →  {list(vals)}")
+    for i, op in enumerate(ops):
+        name = op["op"]
+        args = op["args"]
 
-    # deleteNode(del1_v) — 末尾要素を削除
-    if del1_v in vals:
-        yield frame(msg=f"deleteNode({del1_v}): 値 {del1_v} を探索...")
-        yield from traverse_and_delete(del1_v)
-        yield frame(msg=f"deleteNode({del1_v}) 完了  →  {list(vals)}")
+        if name == "add":
+            x = args[0] if args else 0
+            vals.append(x)
+            yield mk_frame({len(vals)-1: "yellow"}, op_idx=i,
+                           msg=f"add({x})  →  size={len(vals)}")
 
-    # deleteNode(del2_v) — 先頭要素を削除（リストにまだあれば）
-    if del2_v in vals:
-        yield frame(msg=f"deleteNode({del2_v}): 値 {del2_v} を探索...")
-        yield from traverse_and_delete(del2_v)
-        yield frame(msg=f"deleteNode({del2_v}) 完了  →  {list(vals)}")
+        elif name == "addFirst":
+            x = args[0] if args else 0
+            vals.insert(0, x)
+            yield mk_frame({0: "yellow"}, op_idx=i,
+                           msg=f"addFirst({x})  →  size={len(vals)}")
 
-    # addFirst(add_first_v)
-    vals.insert(0, add_first_v)
-    yield frame({0: "yellow"}, msg=f"addFirst({add_first_v})  →  {list(vals)}")
+        elif name == "deleteNode":
+            x = args[0] if args else 0
+            if x not in vals:
+                yield mk_frame(op_idx=i, msg=f"deleteNode({x}): 値 {x} は存在しない",
+                               color="orange")
+            else:
+                yield mk_frame(op_idx=i, msg=f"deleteNode({x}): 値 {x} を線形探索...")
+                yield from _delete_traverse_frames(x, i)
+                yield mk_frame(op_idx=i,
+                               msg=f"deleteNode({x}) 完了  →  size={len(vals)}")
 
-    # display() — 先頭から順方向に走査
-    yield frame(msg="display(): 先頭から順に走査 →")
-    for i in range(len(vals)):
-        h = {i: "yellow"}
-        yield _f([_ll("list", list(vals), "Doubly Linked List  (→)", hl=h, is_doubly=True)],
-                 base + [{"message": f"→  {vals[i]}", "color": "lightgreen"}],
-                 text_position="bottom")
+        elif name == "display":
+            yield mk_frame(op_idx=i, msg="display(): 先頭から順方向に走査 →")
+            for j in range(len(vals)):
+                hl    = {j: "yellow"}
+                ll_hl = _ll("list", list(vals), "Doubly Linked List  (→)",
+                            hl=hl, is_doubly=True, weight=2)
+                yield _f([ll_hl, _op_list_obj(ops_labels, i, weight=1.2)],
+                         base + [{"message": f"→  {vals[j]}", "color": "lightgreen"}],
+                         text_position="bottom")
 
-    # displayReverse() — 末尾から逆方向に走査
-    yield frame(msg="displayReverse(): 末尾から逆順に走査 ←")
-    for i in range(len(vals) - 1, -1, -1):
-        h = {i: "yellow"}
-        yield _f([_ll("list", list(vals), "Doubly Linked List  (←)", hl=h, is_doubly=True)],
-                 base + [{"message": f"←  {vals[i]}", "color": "cyan"}],
-                 text_position="bottom")
+        elif name == "displayReverse":
+            yield mk_frame(op_idx=i, msg="displayReverse(): 末尾から逆順に走査 ←")
+            for j in range(len(vals) - 1, -1, -1):
+                hl    = {j: "yellow"}
+                ll_hl = _ll("list", list(vals), "Doubly Linked List  (←)",
+                            hl=hl, is_doubly=True, weight=2)
+                yield _f([ll_hl, _op_list_obj(ops_labels, i, weight=1.2)],
+                         base + [{"message": f"←  {vals[j]}", "color": "cyan"}],
+                         text_position="bottom")
 
-    # reverse() — 逆順リストを生成して並べて表示
-    rev = list(reversed(vals))
-    yield frame(
-        msg=f"reverse(): 逆順リストを生成  →  {rev}",
-        color="cyan",
-        finished=True,
-        objs=[
-            _ll("list", list(vals), "元のリスト", is_doubly=True),
-            _ll("rev",  rev,        "reversed リスト", is_doubly=True),
-        ],
-    )
+        elif name == "reverse":
+            rev = list(reversed(vals))
+            ll_orig = _ll("list", list(vals), "元のリスト", is_doubly=True)
+            ll_rev  = _ll("rev",  rev,        "reversed リスト", is_doubly=True)
+            ol_obj  = _op_list_obj(ops_labels, i, weight=1.2)
+            yield _f([ll_orig, ll_rev, ol_obj],
+                     base + [{"message": f"reverse(): 逆順リストを生成  →  {rev}",
+                              "color": "cyan"}],
+                     text_position="bottom")
+            vals[:] = rev
+
+        else:
+            yield mk_frame(op_idx=i, msg=f"不明な操作: {op['display']}", color="orange")
+
+    yield mk_frame(op_idx=total, msg=f"全操作完了  size={len(vals)}",
+                   color="#44aa44", finished=True)
 
 
 # ===========================================================================
@@ -691,6 +880,10 @@ def doubly_linked_list(n, **kwargs):
 
 def stack_linked_list(n, **kwargs):
     """Sample5_1: 連結リストによるスタックの Push/Pop（縦方向表示）"""
+    init_data = kwargs.get("init_data")
+    push_seq  = [max(1, min(999, int(x))) for x in init_data] if init_data else [3, 7, 1, 5, 2, 8]
+    pop_count = max(1, len(push_seq) // 2)   # 前半をポップ
+
     base = [{"message": "連結リストスタック  (Sample5_1)", "color": "white"}]
     vals = []   # vals[0] = top (先頭が top)
 
@@ -702,13 +895,13 @@ def stack_linked_list(n, **kwargs):
 
     yield frame(msg="スタック生成 (空)")
 
-    for v in [3, 7, 1, 5, 2, 8]:
-        vals.insert(0, v)                  # Push: 先頭に追加
+    for v in push_seq:
+        vals.insert(0, v)
         yield frame({0: "yellow"}, msg=f"Push({v})  top={vals[0]}  size={len(vals)}")
 
     yield frame(msg=f"isEmpty? = {len(vals) == 0}", color="cyan")
 
-    for _ in range(3):
+    for _ in range(min(pop_count, len(vals))):
         val = vals[0]
         yield frame({0: "#ff4444"}, msg=f"Pop() = {val}  (top を削除)", color="orange")
         vals.pop(0)
@@ -730,6 +923,10 @@ def stack_linked_list(n, **kwargs):
 
 def queue_linked_list(n, **kwargs):
     """Sample5_8: 連結リストによるキューの Enqueue/Dequeue"""
+    init_data = kwargs.get("init_data")
+    enq_seq   = [max(1, min(999, int(x))) for x in init_data] if init_data else [3, 7, 1, 5, 2, 8]
+    deq_count = max(1, len(enq_seq) // 2)
+
     base = [{"message": "連結リストキュー  (Sample5_8)", "color": "white"}]
     vals = []   # vals[0] = front, vals[-1] = back
 
@@ -742,14 +939,14 @@ def queue_linked_list(n, **kwargs):
 
     yield frame(msg="キュー生成 (空)")
 
-    for v in [3, 7, 1, 5, 2, 8]:
-        vals.append(v)                     # Enqueue: 末尾に追加
+    for v in enq_seq:
+        vals.append(v)
         yield frame({len(vals) - 1: "yellow"},
                     msg=f"Enqueue({v})  back={vals[-1]}  size={len(vals)}")
 
     yield frame(msg=f"isEmpty? = {len(vals) == 0}", color="cyan")
 
-    for _ in range(3):
+    for _ in range(min(deq_count, len(vals))):
         val = vals[0]
         yield frame({0: "#ff4444"}, msg=f"Dequeue() = {val}  (front を削除)", color="orange")
         vals.pop(0)
@@ -773,10 +970,14 @@ def queue_linked_list(n, **kwargs):
 
 def stack_array(n, **kwargs):
     """Sample5_4: 配列によるスタックの Push/Pop（縦方向表示）"""
-    MAXSIZE = 8
+    init_data = kwargs.get("init_data")
+    MAXSIZE   = 8
+    push_seq  = [max(1, min(999, int(x))) for x in init_data][:MAXSIZE] if init_data else [3, 7, 1, 5, 2, 8]
+    pop_count = max(1, len(push_seq) // 2)
+
     base = [{"message": "配列スタック  (Sample5_4)", "color": "white"}]
     data = [0] * MAXSIZE
-    top = -1
+    top  = -1
 
     def frame(hl_extra=None, msg="", color="lightgreen", finished=False):
         hl = hl_extra or {}
@@ -786,14 +987,14 @@ def stack_array(n, **kwargs):
 
     yield frame(msg="スタック生成 (空)  top=-1")
 
-    for v in [3, 7, 1, 5, 2, 8]:
+    for v in push_seq:
         top += 1
         data[top] = v
         yield frame({top: "yellow"}, msg=f"Push({v})  →  top={top}")
 
     yield frame(msg=f"isFull? = {top == MAXSIZE - 1}", color="cyan")
 
-    for _ in range(3):
+    for _ in range(min(pop_count, top + 1)):
         val = data[top]
         yield frame({top: "#ff4444"}, msg=f"Pop() = {val}  (top={top})", color="orange")
         data[top] = 0
@@ -801,9 +1002,10 @@ def stack_array(n, **kwargs):
         yield frame(msg=f"Pop 完了  top={top}")
 
     for v in [9, 4]:
-        top += 1
-        data[top] = v
-        yield frame({top: "yellow"}, msg=f"Push({v})  →  top={top}")
+        if top + 1 < MAXSIZE:
+            top += 1
+            data[top] = v
+            yield frame({top: "yellow"}, msg=f"Push({v})  →  top={top}")
 
     yield frame(msg="全 Pop 開始...")
     while top >= 0:
@@ -817,7 +1019,15 @@ def stack_array(n, **kwargs):
 
 def queue_circular(n, **kwargs):
     """Sample5_9: 配列による循環キューの Enqueue/Dequeue（円形表示）"""
-    MAXSIZE = 8
+    init_data = kwargs.get("init_data")
+    MAXSIZE   = 8
+    # 最初の Enqueue 列: MAXSIZE-2 以下に制限（後で追加 Enqueue して循環を見せるため）
+    if init_data:
+        enq_seq1 = [max(1, min(999, int(x))) for x in init_data][: MAXSIZE - 2]
+    else:
+        enq_seq1 = [1, 2, 3, 4, 5, 6]
+    deq_count = max(1, len(enq_seq1) // 2)
+
     base = [{"message": "循環キュー (配列)  (Sample5_9)", "color": "white"}]
     data = [0] * MAXSIZE
     front = back = count = 0
@@ -831,7 +1041,7 @@ def queue_circular(n, **kwargs):
 
     yield frame(msg="循環キュー生成 (空)")
 
-    for v in [1, 2, 3, 4, 5, 6]:
+    for v in enq_seq1:
         data[back] = v
         back = (back + 1) % MAXSIZE
         count += 1
@@ -840,7 +1050,7 @@ def queue_circular(n, **kwargs):
 
     yield frame(msg=f"isFull? = {count == MAXSIZE}", color="cyan")
 
-    for _ in range(3):
+    for _ in range(min(deq_count, count)):
         val = data[front]
         yield frame({front: "#ff4444"}, msg=f"Dequeue() = {val}  front={front}", color="orange")
         data[front] = 0
@@ -848,12 +1058,14 @@ def queue_circular(n, **kwargs):
         count -= 1
         yield frame(msg=f"Dequeue 完了  count={count}  front={front}")
 
+    # 循環ラップを見せる追加 Enqueue
     for v in [7, 8, 9, 10]:
-        data[back] = v
-        back = (back + 1) % MAXSIZE
-        count += 1
-        yield frame({(back - 1) % MAXSIZE: "yellow"},
-                    msg=f"Enqueue({v})  count={count}  back={back % MAXSIZE}  ← 循環ラップ!")
+        if count < MAXSIZE:
+            data[back] = v
+            back = (back + 1) % MAXSIZE
+            count += 1
+            yield frame({(back - 1) % MAXSIZE: "yellow"},
+                        msg=f"Enqueue({v})  count={count}  back={back % MAXSIZE}  ← 循環ラップ!")
 
     yield frame(msg="全 Dequeue 開始...")
     while count > 0:
@@ -1204,9 +1416,9 @@ def _bst_delete(tree, key):
 
 def bst_operations(n, **kwargs):
     """Ch.6: 二分探索木 (BST) の挿入・探索・削除"""
-    from random import sample
-    N = max(5, min(int(n), 24))
-    vals = sample(range(1, 200), N)
+    N   = max(5, min(int(n), 24))
+    rng = random.Random(kwargs.get("seed", N))
+    vals = rng.sample(range(1, 200), N)
 
     base = [{"message": f"二分探索木 (BST)  N={N}  (Ch.6)", "color": "white"}]
 
@@ -1491,9 +1703,9 @@ def _rb_obj(id, root, nil, hl_map=None, label="", weight=1):
 
 def rb_tree_insert(n, **kwargs):
     """赤黒木: 挿入とバランス調整を可視化"""
-    from random import sample
-    N = max(4, min(int(n), 24))
-    vals = sample(range(1, 200), N)
+    N   = max(4, min(int(n), 24))
+    rng = random.Random(kwargs.get("seed", N))
+    vals = rng.sample(range(1, 200), N)
 
     base = [{"message": f"赤黒木 (Red-Black Tree)  N={N}", "color": "white"}]
 
@@ -1901,8 +2113,6 @@ def _hash_frame(slots, m, active, base, msg, color="lightgreen", finished=False)
 
 def hash_open_addressing(n, **kwargs):
     """Ch.10: 開番地法 (線形探索) によるハッシュ表"""
-    from random import sample
-
     def _next_prime(x):
         def _is_prime(v):
             if v < 2: return False
@@ -1913,9 +2123,10 @@ def hash_open_addressing(n, **kwargs):
             x += 1
         return x
 
-    N = max(5, min(int(n), 24))
-    M = _next_prime(max(11, int(N * 1.6)))   # 空きスロットを確保する素数
-    INSERT_VALS = sample(range(1, 200), N)
+    N   = max(5, min(int(n), 24))
+    rng = random.Random(kwargs.get("seed", N))
+    M   = _next_prime(max(11, int(N * 1.6)))   # 空きスロットを確保する素数
+    INSERT_VALS = rng.sample(range(1, 200), N)
 
     base = [{"message": f"ハッシュ表 (開番地法/線形探索)  m={M}  (Ch.10)", "color": "white"}]
 
@@ -1984,8 +2195,6 @@ def hash_open_addressing(n, **kwargs):
 
 def hash_chaining(n, **kwargs):
     """Ch.10: チェイン法によるハッシュ表"""
-    from random import sample
-
     def _next_prime(x):
         def _is_prime(v):
             if v < 2: return False
@@ -1996,9 +2205,10 @@ def hash_chaining(n, **kwargs):
             x += 1
         return x
 
-    N = max(5, min(int(n), 24))
-    M = _next_prime(max(5, N // 2))          # チェイン法: バケツ数 ≈ N/2
-    INSERT_VALS = sample(range(1, 200), N)
+    N   = max(5, min(int(n), 24))
+    rng = random.Random(kwargs.get("seed", N))
+    M   = _next_prime(max(5, N // 2))          # チェイン法: バケツ数 ≈ N/2
+    INSERT_VALS = rng.sample(range(1, 200), N)
 
     base = [{"message": f"ハッシュ表 (チェイン法)  m={M}  (Ch.10)", "color": "white"}]
 
@@ -2113,11 +2323,11 @@ def _bt_split_child(parent, i, t):
 
 def bt_operations(n, **kwargs):
     """Ch.8: B木 (t=2) の挿入を可視化"""
-    from random import sample
     t        = 2
     MAX_KEYS = 2 * t - 1
     N        = max(5, min(int(n), 24))
-    vals     = sample(range(1, 200), N)
+    rng      = random.Random(kwargs.get("seed", N))
+    vals     = rng.sample(range(1, 200), N)
 
     base = [{"message": f"B木  t={t} (2-3-4木)  N={N}  (Ch.8)", "color": "white"}]
 
@@ -2257,9 +2467,9 @@ def _btview_obj(id_, root_dict, label="", weight=3):
 
 def btree_traversals(n, **kwargs):
     """Ch.7: 二分木の BFS / DFS 前順・中順・後順 (Sample7_2)"""
-    from random import sample as _sample
-    N = max(4, min(int(n), 15))
-    vals = _sample(range(1, 100), N)
+    N   = max(4, min(int(n), 15))
+    rng = random.Random(kwargs.get("seed", N))
+    vals = rng.sample(range(1, 100), N)
     root = _make_complete_btree(vals)
 
     base = [{"message": f"完全二分木  N={N}", "color": "white"}]
@@ -2530,17 +2740,20 @@ AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
     ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
     ("vector capacity – 固定+16拡張  (Ch.3)", vector_capacity_fixed16, {"type": "misc"}),
-    ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc", "init_data": True}),
+    ("vector 操作  (Ch.3)",        vector_ops,         {"type": "misc", "init_data": True, "ops": True,
+                                                        "ops_hint": "push_back(5)\nerase(2)\ninsert(1, 9)\nfind_erase(5)\nreverse()"}),
     ("イテレータ・3要素合計  (Ch.3)", iterator_sum3,      {"type": "misc", "init_data": True}),
     # ── Ch.4: 連結リスト ──
-    ("片方向連結リスト  (Ch.4)",              singly_linked_list,      {"type": "misc", "init_data": True}),
+    ("片方向連結リスト  (Ch.4)",              singly_linked_list,      {"type": "misc", "init_data": True, "ops": True,
+                                                                         "ops_hint": "add(5)\naddFirst(9)\ndeleteFirst()\ndeleteNode(5)\nfind(9)"}),
     ("イテレータ・4要素平均  (Ch.4)",         singly_linked_list_avg4, {"type": "misc", "init_data": True}),
-    ("双方向連結リスト  (Ch.4)",              doubly_linked_list,      {"type": "misc", "init_data": True}),
+    ("双方向連結リスト  (Ch.4)",              doubly_linked_list,      {"type": "misc", "init_data": True, "ops": True,
+                                                                         "ops_hint": "add(5)\naddFirst(9)\ndeleteNode(5)\ndisplay()\ndisplayReverse()\nreverse()"}),
     # ── Ch.5: スタック / キュー / RPN ──
-    ("連結リストスタック  (Ch.5)",  stack_linked_list,  {"type": "misc"}),
-    ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc"}),
-    ("配列スタック  (Ch.5)",        stack_array,        {"type": "misc"}),
-    ("循環キュー  (Ch.5)",          queue_circular,     {"type": "misc"}),
+    ("連結リストスタック  (Ch.5)",  stack_linked_list,  {"type": "misc", "init_data": True}),
+    ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc", "init_data": True}),
+    ("配列スタック  (Ch.5)",        stack_array,        {"type": "misc", "init_data": True}),
+    ("循環キュー  (Ch.5)",          queue_circular,     {"type": "misc", "init_data": True}),
     ("RPN 評価・配列スタック  (Ch.5)",  rpn_eval_array,   {"type": "misc"}),
     ("RPN 評価・連結リストスタック  (Ch.5)", rpn_eval_list, {"type": "misc"}),
     ("RPN 変換・評価  (Ch.5)",      rpn_eval,           {"type": "misc"}),

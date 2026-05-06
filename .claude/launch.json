@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "AAforDataStructures",
-      "runtimeExecutable": "/Users/Shared/Dropbox/MyProjects/Claude/AA by Python for CC/AAforDataStructures/.venv/bin/uvicorn",
+      "runtimeExecutable": "/Volumes/Dropbox/Dropbox/MyProjects/Claude/AA by Python for CC/AAforDataStructures/.venv/bin/uvicorn",
       "runtimeArgs": [
         "main:app",
         "--port",

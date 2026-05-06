@@ -57,6 +57,12 @@ function _algoSupportsInitData(algoId) {
   return !!(algo?.meta?.init_data);
 }
 
+/** アルゴリズム ID が ops（操作列）をサポートするか */
+function _algoSupportsOps(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.ops);
+}
+
 // ===== 起動 ========================================================
 window.addEventListener("DOMContentLoaded", async () => {
   await loadMeta();
@@ -217,6 +223,7 @@ class ArrayPanel {
     this._previewRequestId = 0;   // 非同期プレビューの競合防止カウンタ
     this._seed             = 0;   // グラフ等の乱数シード（プレビューと開始で共有）
     this._initData         = null; // ユーザー指定の初期配列（init_data 対応アルゴのみ）
+    this._ops              = null; // ユーザー指定の操作列（ops 対応アルゴのみ）
   }
 
   // ── DOM 構築 ────────────────────────────────────────────────────
@@ -302,6 +309,19 @@ class ArrayPanel {
         <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1"></span>
       </div>
 
+      <div class="params-row ops-row" style="display:none">
+        <label class="lbl-ops" style="flex:1;min-width:0;align-self:flex-start;margin-top:2px">操作列
+          <textarea class="inp-ops" rows="4"
+                    placeholder=""
+                    style="width:100%;max-width:320px;box-sizing:border-box;resize:vertical;font-family:monospace;font-size:0.85em"></textarea>
+        </label>
+        <div style="display:flex;flex-direction:column;gap:4px;align-self:flex-start;margin-top:2px">
+          <button class="btn btn-secondary btn-set-ops" style="white-space:nowrap">設定</button>
+          <button class="btn btn-secondary btn-clear-ops" style="white-space:nowrap;font-size:0.82em">クリア</button>
+        </div>
+        <span class="ops-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;align-self:flex-start;margin-top:4px"></span>
+      </div>
+
       <div class="controls-row">
         <button class="btn btn-primary   btn-start">▶ 開始</button>
         <button class="btn btn-warning   btn-pause" disabled>⏸ 一時停止</button>
@@ -347,6 +367,7 @@ class ArrayPanel {
     const algoId      = Number(this.el.querySelector(".sel-algo").value);
     const type        = _algoType(algoId);
     const hasInitData = _algoSupportsInitData(algoId);
+    const hasOps      = _algoSupportsOps(algoId);
 
     this.el.querySelector(".lbl-target")   .style.display = type === "search" ? "" : "none";
     this.el.querySelector(".lbl-condition").style.display = type === "sort"   ? "" : "none";
@@ -355,10 +376,23 @@ class ArrayPanel {
     // 初期状態行
     this.el.querySelector(".init-data-row").style.display = hasInitData ? "" : "none";
     if (!hasInitData) {
-      // 対応しないアルゴに切り替えたらリセット
       this._initData = null;
       this.el.querySelector(".inp-init-data").value = "";
       this.el.querySelector(".init-data-info").textContent = "";
+    }
+
+    // 操作列行
+    this.el.querySelector(".ops-row").style.display = hasOps ? "" : "none";
+    if (!hasOps) {
+      this._ops = null;
+      this.el.querySelector(".inp-ops").value = "";
+      this.el.querySelector(".ops-info").textContent = "";
+    } else {
+      // アルゴリズム固有のプレースホルダーをセット
+      const algo = algorithms.find(a => a.id === algoId);
+      const hint = algo?.meta?.ops_hint || "";
+      const phLines = hint ? `例（1行1操作）:\n${hint}` : "例（1行1操作）:\nadd(5)\n...";
+      this.el.querySelector(".inp-ops").placeholder = phLines;
     }
   }
 
@@ -387,6 +421,16 @@ class ArrayPanel {
     q(".btn-set-init-data").addEventListener("click", () => this._applyInitData());
     q(".inp-init-data").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); this._applyInitData(); }
+    });
+
+    // 操作列: 設定ボタン / クリアボタン
+    q(".btn-set-ops").addEventListener("click", () => this._applyOps());
+    q(".btn-clear-ops").addEventListener("click", () => {
+      q(".inp-ops").value = "";
+      this._ops = null;
+      q(".ops-info").style.color = "#aaa";
+      q(".ops-info").textContent = "（デフォルト操作列を使用）";
+      if (!this.isRunning) this._drawPreview();
     });
 
     this.el.addEventListener("mousedown", () => this._bringToFront());
@@ -459,6 +503,38 @@ class ArrayPanel {
     info.style.color = "#44cc88";
     const preview = nums.slice(0, 8).join(", ") + (nums.length > 8 ? " …" : "");
     info.textContent = `✓ ${nums.length} 個: ${preview}`;
+
+    if (!this.isRunning) this._drawPreview();
+  }
+
+  // ── 操作列の解析・適用 ─────────────────────────────────────────
+  _applyOps() {
+    const raw  = this.el.querySelector(".inp-ops").value.trim();
+    const info = this.el.querySelector(".ops-info");
+
+    if (!raw) {
+      this._ops = null;
+      info.style.color = "#aaa";
+      info.textContent = "（デフォルト操作列を使用）";
+      if (!this.isRunning) this._drawPreview();
+      return;
+    }
+
+    // 改行・セミコロン区切りで操作を分割し、空行・コメント行を除去
+    const lines = raw.split(/[\n;]+/)
+      .map(s => s.trim())
+      .filter(s => s && !s.startsWith("#"));
+
+    if (lines.length === 0) {
+      info.style.color = "#ff6666";
+      info.textContent = "⚠ 有効な操作が1つもありません";
+      return;
+    }
+
+    this._ops = lines;
+    info.style.color = "#44cc88";
+    const preview = lines.slice(0, 3).join(", ") + (lines.length > 3 ? " …" : "");
+    info.textContent = `✓ ${lines.length} 操作: ${preview}`;
 
     if (!this.isRunning) this._drawPreview();
   }
@@ -573,6 +649,9 @@ class ArrayPanel {
       if (this._initData && this._initData.length > 0) {
         previewUrl += `&init_data=${encodeURIComponent(this._initData.join(","))}`;
       }
+      if (this._ops && this._ops.length > 0) {
+        previewUrl += `&ops=${encodeURIComponent(this._ops.join("\n"))}`;
+      }
       const res = await fetch(previewUrl);
       if (!res.ok) return;
       const frame = await res.json();
@@ -641,9 +720,12 @@ class ArrayPanel {
           body.data = this._previewCache.values;
         }
       }
-      // misc: init_data が設定されていれば一緒に送る
+      // misc: init_data / ops が設定されていれば一緒に送る
       if (type === "misc" && this._initData && this._initData.length > 0) {
         body.init_data = this._initData;
+      }
+      if (type === "misc" && this._ops && this._ops.length > 0) {
+        body.ops = this._ops;
       }
 
       const res = await fetch("/api/start", {

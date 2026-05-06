@@ -130,13 +130,44 @@ _hash_obj(id, slots, m, label="", active=-1, weight=1)
    - シグネチャ: `def my_algo(n, **kwargs)`
    - 全アルゴリズムが `"misc"` タイプ（target 入力・data_condition 非表示）
    - 最低 1 フレーム yield すること（`finished=True` のフレームで終了）
+   - **乱数は必ず** `rng = random.Random(kwargs.get("seed", N))` を使うこと（グローバル `random.sample/randint` は使わない）
 
 2. `AlgorithmList` に登録（ファイル末尾）:
    ```python
    ("表示名  (Ch.X)", my_algo, {"type": "misc"}),
    ```
+   - `init_data` 対応の場合: `"init_data": True` を meta に追加
+   - `ops` 対応の場合: `"ops": True` + `"ops_hint": "op1()\nop2()"` を meta に追加
 
 3. **1操作 = 1 `yield`** を原則とする
+
+---
+
+## init_data / ops の対応状況
+
+### init_data（初期データをユーザーが指定可能）
+
+| アルゴリズム | init_data の意味 |
+|---|---|
+| vector 操作 | 初期ベクター要素 |
+| イテレータ・3要素合計 | テープの要素列 |
+| 片方向連結リスト | リスト初期値 |
+| イテレータ・4要素平均 | テープの要素列 |
+| 双方向連結リスト | リスト初期値 |
+| 連結リストスタック | Push する値列 |
+| 連結リストキュー | Enqueue する値列 |
+| 配列スタック | Push する値列（最大8件） |
+| 循環キュー | 最初の Enqueue 値列（最大6件） |
+
+### ops（操作列をユーザーが指定可能）
+
+| アルゴリズム | 使える操作 |
+|---|---|
+| vector 操作 | `push_back(x)` / `erase(idx)` / `insert(idx, x)` / `find_erase(x)` / `reverse()` |
+| 片方向連結リスト | `add(x)` / `addFirst(x)` / `deleteFirst()` / `deleteNode(x)` / `find(x)` |
+| 双方向連結リスト | `add(x)` / `addFirst(x)` / `deleteNode(x)` / `display()` / `displayReverse()` / `reverse()` |
+
+書式: 1行1操作。セミコロン区切りも可。`#` 始まり行はコメント。
 
 ---
 
