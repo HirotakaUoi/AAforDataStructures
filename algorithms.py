@@ -445,23 +445,28 @@ def iterator_sum3(n, **kwargs):
         data = [max(1, min(999, int(x))) for x in init_data]
         N = len(data)
     else:
-        N = max(6, min(int(n), 30))
+        N_raw = max(6, min(int(n), 30))
+        # 3 の倍数の場合は -1 して端数グループを必ず含める
+        N = N_raw - 1 if N_raw % 3 == 0 else N_raw
         rng = random.Random(kwargs.get("seed"))
         data = [rng.randint(1, 99) for _ in range(N)]
-    base = [{"message": f"イテレータ: 3 要素ずつの合計  N={N}  (Sample3_3)", "color": "white"}]
+
+    full_grps = N // 3
+    remainder = N % 3
+    grp_info  = f"= {full_grps}×3 + 端数{remainder}" if remainder else f"= {full_grps}×3"
+    base = [{"message": f"イテレータ: 3 要素ずつの合計  N={N} {grp_info}  (Sample3_3)",
+             "color": "white"}]
 
     output = []
     i = 0
 
     def out_c(out_hl=None):
-        """確定済み output の _c オブジェクト。空の場合はプレースホルダ(斜線セル)を表示。"""
         if not output:
             return _c("output", [0], "Output (空)", unused_from=0, weight=1.0)
         return _c("output", list(output), f"Output  ({len(output)} 要素)",
                   hl=out_hl, weight=1.0)
 
     def vars_obj(sum_val, count_val, sum_hl=None, count_hl=None):
-        """sum と count を 2 セルで並べて表示"""
         hl = {}
         if sum_hl:   hl[0] = sum_hl
         if count_hl: hl[1] = count_hl
@@ -485,26 +490,36 @@ def iterator_sum3(n, **kwargs):
     yield mk(0)
 
     while i < N:
-        grp = [i + k for k in range(3) if i + k < N]
+        grp      = [i + k for k in range(3) if i + k < N]
+        is_partial = len(grp) < 3   # 端数グループ
+
+        # 端数グループの予告
+        if is_partial:
+            yield mk(i, extra=[{
+                "message": f"端数グループ: 残り {len(grp)} 要素 ({len(grp)}/3)",
+                "color": "#ffaa44"}])
 
         # テープを 1 要素ずつスキャンしながら sum/count セルを更新
         partial = 0
         for step, idx in enumerate(grp):
             partial += data[idx]
             cnt = step + 1
+            msg_color = "#ffaa44" if is_partial else "lightgreen"
             yield mk(idx, partial, cnt, sum_hl="yellow", count_hl="yellow",
                      extra=[{"message": f"it → data[{idx}] = {data[idx]}  ({cnt}/{len(grp)})  sum = {partial}",
-                             "color": "lightgreen"}])
+                             "color": msg_color}])
 
         s = partial
         output.append(s)
 
         # グループ完了: vars セルを sum 単体に差し替え、output 末尾を黄色で確定
-        sum_str = " + ".join(str(data[j]) for j in grp)
+        sum_str   = " + ".join(str(data[j]) for j in grp)
+        done_color = "#ffaa44" if is_partial else "cyan"
+        suffix     = f"  ※端数グループ ({len(grp)}/3 要素)" if is_partial else ""
         yield mk(grp[-1], s, sum_mode=True,
                  out_hl={len(output) - 1: "#ffff44"},
-                 extra=[{"message": f"sum = {sum_str} = {s}  count = {len(grp)}",
-                         "color": "cyan"}])
+                 extra=[{"message": f"sum = {sum_str} = {s}{suffix}",
+                         "color": done_color}])
 
         # sum/count セルをリセット（次のグループへ）
         if i + len(grp) < N:
@@ -661,13 +676,20 @@ def singly_linked_list_avg4(n, **kwargs):
         data = [max(1, min(999, int(x))) for x in init_data]
         N = len(data)
     else:
-        N = max(4, min(int(n), 32))
+        N_raw = max(5, min(int(n), 32))
+        # 4 の倍数の場合は -1 して端数グループを必ず含める
+        N = N_raw - 1 if N_raw % 4 == 0 else N_raw
         rng = random.Random(kwargs.get("seed"))
         data = [rng.randint(1, 99) for _ in range(N)]
-    base = [{"message": f"イテレータ: 4 要素ずつの平均  N={N}  (Sample4_7)", "color": "white"}]
 
-    vals   = list(data)   # linked list の内容
-    output = []           # 計算済み平均値
+    full_grps = N // 4
+    remainder = N % 4
+    grp_info  = f"= {full_grps}×4 + 端数{remainder}" if remainder else f"= {full_grps}×4"
+    base = [{"message": f"イテレータ: 4 要素ずつの平均  N={N} {grp_info}  (Sample4_7)",
+             "color": "white"}]
+
+    vals   = list(data)
+    output = []
 
     def out_obj(out_hl=None):
         if not output:
@@ -676,7 +698,6 @@ def singly_linked_list_avg4(n, **kwargs):
                   hl=out_hl, weight=0.7)
 
     def vars_obj(sum_val, count_val, sum_hl=None, count_hl=None):
-        """sum と count を 2 セルで並べて表示"""
         hl = {}
         if sum_hl:   hl[0] = sum_hl
         if count_hl: hl[1] = count_hl
@@ -687,7 +708,6 @@ def singly_linked_list_avg4(n, **kwargs):
               sum_val=0, count_val=0, sum_hl=None, count_hl=None,
               avg_mode=False, avg_val=0, out_hl=None):
         if avg_mode:
-            # グループ確定時: sum セルを avg 単体セルに差し替え
             var_c = _c("vars_cell", [avg_val], "avg",
                        hl={0: "cyan"}, weight=0.45)
         else:
@@ -704,39 +724,48 @@ def singly_linked_list_avg4(n, **kwargs):
     yield frame(msg=f"リストを生成  size={N}  (イテレータ it = begin())")
 
     i = 0
+    avg = 0
     while i < N:
-        grp_end  = min(i + 4, N)
-        grp_size = grp_end - i
-        scanned  = []
-        run_sum  = 0
+        grp_end    = min(i + 4, N)
+        grp_size   = grp_end - i
+        is_partial = grp_size < 4
+        scanned    = []
+        run_sum    = 0
 
-        # グループ内を 1 ノードずつイテレータで走査（sum・count セルをリアルタイム更新）
+        # 端数グループの予告
+        if is_partial:
+            yield frame(
+                msg=f"端数グループ: 残り {grp_size} 要素 ({grp_size}/4)",
+                color="#ffaa44")
+
+        # グループ内を 1 ノードずつイテレータで走査
         for step, idx in enumerate(range(i, grp_end)):
             run_sum += vals[idx]
             scanned.append(idx)
-            hl = {s: "#4488cc" for s in scanned[:-1]}   # 走査済み: 青
-            hl[idx] = "yellow"                           # 現在ノード: 黄
+            hl = {s: "#4488cc" for s in scanned[:-1]}
+            hl[idx] = "yellow"
+            msg_color = "#ffaa44" if is_partial else "lightgreen"
             yield frame(
                 hl=hl,
                 msg=f"it → node[{idx}] = {vals[idx]}  ({step + 1}/{grp_size} 要素目)  sum = {run_sum}",
-                color="lightgreen",
+                color=msg_color,
                 sum_val=run_sum, count_val=step + 1,
                 sum_hl="yellow", count_hl="yellow")
 
         # 平均を計算して output へ追加
         avg = run_sum // grp_size
         output.append(avg)
-        sum_str = " + ".join(str(vals[j]) for j in range(i, grp_end))
-        hl_done = {j: "#44aa44" for j in range(i, grp_end)}
-        # グループ確定: vars セルを avg 単体に差し替え
+        sum_str    = " + ".join(str(vals[j]) for j in range(i, grp_end))
+        hl_done    = {j: "#44aa44" for j in range(i, grp_end)}
+        done_color = "#ffaa44" if is_partial else "cyan"
+        suffix     = f"  ※端数グループ ({grp_size}/4 要素)" if is_partial else ""
         yield frame(
             hl=hl_done,
-            msg=f"avg = ({sum_str}) / {grp_size} = {run_sum} / {grp_size} = {avg}",
-            color="cyan",
+            msg=f"avg = ({sum_str}) / {grp_size} = {run_sum} / {grp_size} = {avg}{suffix}",
+            color=done_color,
             avg_mode=True, avg_val=avg,
             out_hl={len(output) - 1: "#ffff44"})
 
-        # sum / count セルをリセット（次のグループへ）
         if grp_end < N:
             yield frame(
                 msg=f"{len(output)} 個の平均を計算済み", color="#44aa44",
