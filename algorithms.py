@@ -1109,8 +1109,14 @@ def queue_circular(n, **kwargs):
 
 def rpn_eval(n, **kwargs):
     """Sample5_6 + Sample5_2: B型式(中置記法)→ A型式(RPN)変換 + スタック評価"""
-    # B型式(中置記法): (2+3)*(8-1)  → A型式(RPN): 2 3 + 8 1 - *  → 結果: 35
-    expr     = list("(2+3)*(8-1)")
+    # init_data: B型式の式文字列（空白除去済み）を受け取る
+    _ALLOWED = set("0123456789+-*/()")
+    init_data = kwargs.get("init_data")
+    if init_data:
+        raw = "".join(str(x) for x in init_data).replace(" ", "")
+        expr = list(raw) if raw and all(c in _ALLOWED for c in raw) else list("(2+3)*(8-1)")
+    else:
+        expr = list("(2+3)*(8-1)")
     expr_str = "".join(expr)
     base = [{"message": f"B型式(中置) → A型式(RPN)  式: {expr_str}", "color": "white"}]
 
@@ -1208,8 +1214,18 @@ def rpn_eval(n, **kwargs):
 
 def rpn_eval_array(n, **kwargs):
     """Sample5_2: A型式(RPN) を配列スタックで評価"""
-    rpn_str = "2 3 + 8 1 - *"
-    tokens  = rpn_str.split()   # ['2','3','+','8','1','-','*']  空白セルなし
+    # init_data: A型式トークン列（空白区切りで入力）を受け取る
+    _ALLOWED_TOK = set("0123456789+-*/")
+    init_data = kwargs.get("init_data")
+    if init_data:
+        raw_tokens = " ".join(str(x) for x in init_data).split()
+        if raw_tokens and all(all(c in _ALLOWED_TOK for c in t) for t in raw_tokens):
+            tokens = raw_tokens
+        else:
+            tokens = "2 3 + 8 1 - *".split()
+    else:
+        tokens = "2 3 + 8 1 - *".split()
+    rpn_str = " ".join(tokens)
     base    = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_2・配列スタック)", "color": "white"}]
     nums    = []   # 配列スタック (Python list として模倣)
 
@@ -1248,8 +1264,18 @@ def rpn_eval_array(n, **kwargs):
 
 def rpn_eval_list(n, **kwargs):
     """Sample5_5: A型式(RPN) を連結リストスタックで評価"""
-    rpn_str = "2 3 + 8 1 - *"
-    tokens  = rpn_str.split()   # ['2','3','+','8','1','-','*']  空白セルなし
+    # init_data: A型式トークン列（空白区切りで入力）を受け取る
+    _ALLOWED_TOK = set("0123456789+-*/")
+    init_data = kwargs.get("init_data")
+    if init_data:
+        raw_tokens = " ".join(str(x) for x in init_data).split()
+        if raw_tokens and all(all(c in _ALLOWED_TOK for c in t) for t in raw_tokens):
+            tokens = raw_tokens
+        else:
+            tokens = "2 3 + 8 1 - *".split()
+    else:
+        tokens = "2 3 + 8 1 - *".split()
+    rpn_str = " ".join(tokens)
     base    = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_5・連結リストスタック)", "color": "white"}]
     nums    = []   # 連結リストスタック (top が先頭)
 
@@ -1290,7 +1316,14 @@ def rpn_direct_b(n, **kwargs):
     入力形式: 各数値を個別にカッコで囲む完全括弧記法
     例: (((2)+(3))*((8)-(1))) = 35
     """
-    expr_str = "(((2)+(3))*((8)-(1)))"
+    # init_data: B型式の式文字列（空白除去済み）を受け取る
+    _ALLOWED = set("0123456789+-*/()")
+    init_data = kwargs.get("init_data")
+    if init_data:
+        raw = "".join(str(x) for x in init_data).replace(" ", "")
+        expr_str = raw if raw and all(c in _ALLOWED for c in raw) else "(((2)+(3))*((8)-(1)))"
+    else:
+        expr_str = "(((2)+(3))*((8)-(1)))"
     expr     = list(expr_str)
     base     = [{"message": f"B型式直接計算: {expr_str}  (Sample5_7_1_2_3)", "color": "white"}]
 
@@ -2783,10 +2816,18 @@ AlgorithmList = [
     ("連結リストキュー  (Ch.5)",    queue_linked_list,  {"type": "misc", "init_data": True}),
     ("配列スタック  (Ch.5)",        stack_array,        {"type": "misc", "init_data": True}),
     ("循環キュー  (Ch.5)",          queue_circular,     {"type": "misc", "init_data": True}),
-    ("RPN 評価・配列スタック  (Ch.5)",  rpn_eval_array,   {"type": "misc"}),
-    ("RPN 評価・連結リストスタック  (Ch.5)", rpn_eval_list, {"type": "misc"}),
-    ("RPN 変換・評価  (Ch.5)",      rpn_eval,           {"type": "misc"}),
-    ("B型式 直接計算  (Ch.5)",      rpn_direct_b,       {"type": "misc"}),
+    ("RPN 評価・配列スタック  (Ch.5)",  rpn_eval_array,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: 2 3 + 8 1 - *"}),
+    ("RPN 評価・連結リストスタック  (Ch.5)", rpn_eval_list,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: 2 3 + 8 1 - *"}),
+    ("RPN 変換・評価  (Ch.5)",      rpn_eval,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: (2+3)*(8-1)"}),
+    ("B型式 直接計算  (Ch.5)",      rpn_direct_b,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: (((2)+(3))*((8)-(1)))"}),
     # ── Ch.6: 二分探索木 ──
     ("BST 挿入・探索・削除  (Ch.6)", bst_operations,    {"type": "misc"}),
     # ── Ch.7: 二分木走査 / 演算木 ──

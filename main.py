@@ -48,7 +48,7 @@ class StartParams(BaseModel):
     data:           Optional[list[int]] = None  # 初期データ (search / sort 共用)
     data_condition: int   = 0         # 0=ランダム 1=昇順 2=降順 3=ほぼ昇順 (sort 用)
     seed:           Optional[int] = None        # 乱数シード (graph 等)
-    init_data:      Optional[list[int]] = None  # ユーザー指定の初期配列 (misc init_data 対応アルゴ用)
+    init_data:      Optional[list[str]] = None  # ユーザー指定の初期データ (misc init_data 対応アルゴ用)
     ops:            Optional[list[str]] = None  # ユーザー指定の操作列 (misc ops 対応アルゴ用)
 
 
@@ -62,13 +62,20 @@ def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None,
     try:
         kw: dict = {"seed": seed}
         if init_data:
+            import re as _re
+            stripped = init_data.strip()
             try:
-                import re
-                parsed = [int(x) for x in re.split(r"[,\s]+", init_data.strip()) if x]
-                if parsed:
-                    kw["init_data"] = parsed
+                # まず整数リストとして解釈を試みる
+                parsed = [int(x) for x in _re.split(r"[,\s]+", stripped) if x]
+                kw["init_data"] = [str(v) for v in parsed]
             except ValueError:
-                pass
+                # 整数でなければ式/トークン列として扱う
+                # 空白・コンマで分割してトークン配列に変換
+                # B型式: "(2 + 3)*(8-1)" → ["(2", "+", "3)*(8-1)"] → algo側で join
+                # A型式: "2 3 + 8 1 - *" → ["2","3","+","8","1","-","*"]
+                tokens = [x for x in _re.split(r"[,\s]+", stripped) if x]
+                if tokens:
+                    kw["init_data"] = tokens
         if ops:
             # 改行またはセミコロン区切りの操作列文字列をリストに変換
             import re as _re

@@ -379,6 +379,13 @@ class ArrayPanel {
       this._initData = null;
       this.el.querySelector(".inp-init-data").value = "";
       this.el.querySelector(".init-data-info").textContent = "";
+    } else {
+      // アルゴリズム固有のプレースホルダーをセット
+      const algo = algorithms.find(a => a.id === algoId);
+      const hint = algo?.meta?.init_data_hint || "";
+      const isExpr = algo?.meta?.init_data_type === "expr";
+      this.el.querySelector(".inp-init-data").placeholder =
+        hint || (isExpr ? "式を入力" : "例: 5 2 7 1  または  5,2,7,1");
     }
 
     // 操作列行
@@ -490,19 +497,40 @@ class ArrayPanel {
       return;
     }
 
-    // コンマ・空白区切りで整数をパース
-    const tokens = raw.split(/[\s,]+/).filter(s => s !== "");
-    const nums   = tokens.map(s => parseInt(s, 10));
-    if (nums.some(isNaN) || nums.length === 0) {
-      info.style.color = "#ff6666";
-      info.textContent = "⚠ 整数をコンマまたは空白で区切って入力してください";
-      return;
-    }
+    // 式入力モードか整数リストモードかを判定
+    const algoId = parseInt(this.el.querySelector(".inp-algo").value, 10);
+    const algo   = algorithms.find(a => a.id === algoId);
+    const isExpr = algo?.meta?.init_data_type === "expr";
 
-    this._initData = nums;
-    info.style.color = "#44cc88";
-    const preview = nums.slice(0, 8).join(", ") + (nums.length > 8 ? " …" : "");
-    info.textContent = `✓ ${nums.length} 個: ${preview}`;
+    if (isExpr) {
+      // 式モード: 空白・コンマで分割してトークン配列として保持
+      // （B型式: "(2 + 3)" → ["(2","+","3)"] → アルゴリズム側で join して "(2+3)"）
+      // （A型式: "2 3 + 8 1 - *" → ["2","3","+","8","1","-","*"] → 7トークン）
+      const tokens = raw.split(/[\s,]+/).filter(t => t.length > 0);
+      if (tokens.length === 0) {
+        this._initData = null;
+        info.style.color = "#aaa";
+        info.textContent = "（デフォルト式を使用）";
+        if (!this.isRunning) this._drawPreview();
+        return;
+      }
+      this._initData = tokens;
+      info.style.color = "#44cc88";
+      info.textContent = `✓ 式: ${tokens.join(" ")}`;
+    } else {
+      // 整数リストモード: コンマ・空白区切りで整数をパース
+      const tokens = raw.split(/[\s,]+/).filter(s => s !== "");
+      const nums   = tokens.map(s => parseInt(s, 10));
+      if (nums.some(isNaN) || nums.length === 0) {
+        info.style.color = "#ff6666";
+        info.textContent = "⚠ 整数をコンマまたは空白で区切って入力してください";
+        return;
+      }
+      this._initData = nums;
+      info.style.color = "#44cc88";
+      const preview = nums.slice(0, 8).join(", ") + (nums.length > 8 ? " …" : "");
+      info.textContent = `✓ ${nums.length} 個: ${preview}`;
+    }
 
     if (!this.isRunning) this._drawPreview();
   }
