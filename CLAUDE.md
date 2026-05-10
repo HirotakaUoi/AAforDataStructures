@@ -233,3 +233,31 @@ AAforDataStructures/
         ├── array_canvas.js  Canvas 描画エンジン
         └── ws_client.js     WebSocket クライアント
 ```
+
+---
+
+## 現在のファイルバージョン
+
+| ファイル | バージョン |
+|---|---|
+| `static/js/app.js` | **v23** |
+| `static/js/array_canvas.js` | **v40** |
+| `static/js/ws_client.js` | v1 |
+| `static/css/style.css` | v4 |
+
+---
+
+## 最近の変更履歴
+
+| 日付 | 内容 |
+|---|---|
+| 2026-05-10 | タッチドラッグ軸ロックバグ修正 — `onMove` 内に `preventDefault()` 追加 (app.js v22→v23) |
+| 2026-05-10 | RPN 式入力バグ修正 — `.inp-algo`→`.sel-algo`、A型式トークン分割修正 (app.js v20→v22) |
+| 2026-05-10 | RPN 4本に `init_data` 式入力対応 (`init_data_type: "expr"`) |
+| 2026-05-10 | タッチデバイス対応 — `resize-handle` 追加、`touch-action: none`、touch イベントリスナー追加 |
+| 2026-05-07 | ops プレースホルダー改善（アルゴリズム固有ヒント） |
+| 2026-05-06 | Ch.5 スタック・キュー4本に `init_data` 対応 / シード不一致バグ修正 |
+| 2026-05-05 | ops 操作列 UI 追加（vector_ops / singly / doubly） |
+| 2026-05-05 | lineWidth 強化（アニメーション指針対応）/ iterator_sum3 count 可視化 / BST 関数名衝突バグ修正 |
+| 2026-05-04 | AVL木 挿入・探索・削除 追加 (Ch.8) + 回転矢印アニメーション |
+| 2026-05-03 | カラーテーマ全面対応 (dark/bright/hc/hcbright) |
