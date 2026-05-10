@@ -240,7 +240,7 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v23** |
+| `static/js/app.js` | **v25** |
 | `static/js/array_canvas.js` | **v40** |
 | `static/js/ws_client.js` | v1 |
 | `static/css/style.css` | v4 |
@@ -251,7 +251,8 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
-| 2026-05-10 | タッチドラッグ軸ロックバグ修正 — `onMove` 内に `preventDefault()` 追加 (app.js v22→v23) |
+| 2026-05-11 | drag/resize を Pointer Events API に統一 — `setPointerCapture` で軸ロック完全解消 (app.js v24→v25) |
+| 2026-05-10 | タッチドラッグ軸ロックバグ修正 — `onMove` 内に `preventDefault()` 追加 / スナップをリリース時のみ適用 (app.js v22→v24) |
 | 2026-05-10 | RPN 式入力バグ修正 — `.inp-algo`→`.sel-algo`、A型式トークン分割修正 (app.js v20→v22) |
 | 2026-05-10 | RPN 4本に `init_data` 式入力対応 (`init_data_type: "expr"`) |
 | 2026-05-10 | タッチデバイス対応 — `resize-handle` 追加、`touch-action: none`、touch イベントリスナー追加 |
