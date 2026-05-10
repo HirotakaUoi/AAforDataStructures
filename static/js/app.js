@@ -498,7 +498,7 @@ class ArrayPanel {
     }
 
     // 式入力モードか整数リストモードかを判定
-    const algoId = parseInt(this.el.querySelector(".inp-algo").value, 10);
+    const algoId = parseInt(this.el.querySelector(".sel-algo").value, 10);
     const algo   = algorithms.find(a => a.id === algoId);
     const isExpr = algo?.meta?.init_data_type === "expr";
 
