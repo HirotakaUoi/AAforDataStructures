@@ -63,6 +63,12 @@ function _algoSupportsOps(algoId) {
   return !!(algo?.meta?.ops);
 }
 
+/** アルゴリズム ID がハッシュ関数選択をサポートするか */
+function _algoSupportsHashFunc(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.hash_func);
+}
+
 // ===== 起動 ========================================================
 window.addEventListener("DOMContentLoaded", async () => {
   await loadMeta();
@@ -224,6 +230,7 @@ class ArrayPanel {
     this._seed             = 0;   // グラフ等の乱数シード（プレビューと開始で共有）
     this._initData         = null; // ユーザー指定の初期配列（init_data 対応アルゴのみ）
     this._ops              = null; // ユーザー指定の操作列（ops 対応アルゴのみ）
+    this._hashFunc         = null; // ユーザー指定のハッシュ関数（hash_func 対応アルゴのみ）
   }
 
   // ── DOM 構築 ────────────────────────────────────────────────────
@@ -322,6 +329,21 @@ class ArrayPanel {
         <span class="ops-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;align-self:flex-start;margin-top:4px"></span>
       </div>
 
+      <div class="params-row hash-func-row" style="display:none">
+        <label class="row-label" style="white-space:nowrap;margin-right:6px">ハッシュ関数</label>
+        <select class="sel-hash-func" style="flex:0 0 auto;max-width:220px">
+          <option value="mod">除算法  h(k) = k mod m</option>
+          <option value="mult">乗算法  h(k) = ⌊m·(k·A mod 1)⌋</option>
+          <option value="square">二乗法  h(k) = k² mod m</option>
+          <option value="custom">カスタム…</option>
+        </select>
+        <input type="text" class="inp-hash-custom"
+               placeholder="例: (k*k+k)%m"
+               style="display:none;width:120px;font-family:monospace;font-size:0.85em;margin-left:4px">
+        <button class="btn btn-secondary btn-set-hash-func" style="white-space:nowrap;margin-left:6px">設定</button>
+        <span class="hash-func-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:6px"></span>
+      </div>
+
       <div class="controls-row">
         <button class="btn btn-primary   btn-start">▶ 開始</button>
         <button class="btn btn-warning   btn-pause" disabled>⏸ 一時停止</button>
@@ -365,10 +387,11 @@ class ArrayPanel {
 
   // ── アルゴリズム種別に応じて UI を表示/非表示 ─────────────────
   _updateParamVisibility() {
-    const algoId      = Number(this.el.querySelector(".sel-algo").value);
-    const type        = _algoType(algoId);
-    const hasInitData = _algoSupportsInitData(algoId);
-    const hasOps      = _algoSupportsOps(algoId);
+    const algoId       = Number(this.el.querySelector(".sel-algo").value);
+    const type         = _algoType(algoId);
+    const hasInitData  = _algoSupportsInitData(algoId);
+    const hasOps       = _algoSupportsOps(algoId);
+    const hasHashFunc  = _algoSupportsHashFunc(algoId);
 
     this.el.querySelector(".lbl-target")   .style.display = type === "search" ? "" : "none";
     this.el.querySelector(".lbl-condition").style.display = type === "sort"   ? "" : "none";
@@ -401,6 +424,15 @@ class ArrayPanel {
       const hint = algo?.meta?.ops_hint || "";
       const phLines = hint ? `例（1行1操作）:\n${hint}` : "例（1行1操作）:\nadd(5)\n...";
       this.el.querySelector(".inp-ops").placeholder = phLines;
+    }
+
+    // ハッシュ関数行
+    this.el.querySelector(".hash-func-row").style.display = hasHashFunc ? "" : "none";
+    if (!hasHashFunc) {
+      this._hashFunc = null;
+      this.el.querySelector(".sel-hash-func").value = "mod";
+      this.el.querySelector(".inp-hash-custom").style.display = "none";
+      this.el.querySelector(".hash-func-info").textContent = "";
     }
   }
 
@@ -439,6 +471,17 @@ class ArrayPanel {
       q(".ops-info").style.color = "#aaa";
       q(".ops-info").textContent = "（デフォルト操作列を使用）";
       if (!this.isRunning) this._drawPreview();
+    });
+
+    // ハッシュ関数: セレクト変更 → カスタム入力欄の表示切替
+    q(".sel-hash-func").addEventListener("change", () => {
+      const isCustom = q(".sel-hash-func").value === "custom";
+      q(".inp-hash-custom").style.display = isCustom ? "" : "none";
+    });
+    // ハッシュ関数: 設定ボタン & Enter キー
+    q(".btn-set-hash-func").addEventListener("click", () => this._applyHashFunc());
+    q(".inp-hash-custom").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); this._applyHashFunc(); }
     });
 
     this.el.addEventListener("mousedown", () => this._bringToFront());
@@ -597,6 +640,32 @@ class ArrayPanel {
     if (!this.isRunning) this._drawPreview();
   }
 
+  // ── ハッシュ関数の解析・適用 ───────────────────────────────────
+  _applyHashFunc() {
+    const q    = (sel) => this.el.querySelector(sel);
+    const sel  = q(".sel-hash-func").value;
+    const info = q(".hash-func-info");
+
+    if (sel === "custom") {
+      const formula = q(".inp-hash-custom").value.trim().replace(/\s+/g, "");
+      if (!formula) {
+        info.style.color = "#ff6666";
+        info.textContent = "⚠ 式を入力してください  例: (k*k)%m";
+        return;
+      }
+      this._hashFunc = formula;
+      info.style.color = "#44cc88";
+      info.textContent = `✓ カスタム: ${formula}`;
+    } else {
+      this._hashFunc = sel;
+      const labels = { mod: "除算法 (mod)", mult: "乗算法 (mult)", square: "二乗法 (square)" };
+      info.style.color = "#44cc88";
+      info.textContent = `✓ ${labels[sel] || sel}`;
+    }
+
+    if (!this.isRunning) this._drawPreview();
+  }
+
   // ── 最前面へ ──────────────────────────────────────────────────
   _bringToFront() {
     let maxZ = 0;
@@ -704,8 +773,14 @@ class ArrayPanel {
     this._seed = Math.floor(Math.random() * 1e9);
     try {
       let previewUrl = `/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`;
-      if (this._initData && this._initData.length > 0) {
-        previewUrl += `&init_data=${encodeURIComponent(this._initData.join(","))}`;
+      {
+        // init_data: ハッシュ関数対応アルゴはハッシュ関数トークンも追加
+        const supportsHashFunc = _algoSupportsHashFunc(algoId);
+        const initTokens = [...(this._initData || [])];
+        if (supportsHashFunc && this._hashFunc) initTokens.push(this._hashFunc);
+        if (initTokens.length > 0) {
+          previewUrl += `&init_data=${encodeURIComponent(initTokens.join(","))}`;
+        }
       }
       if (this._ops && this._ops.length > 0) {
         previewUrl += `&ops=${encodeURIComponent(this._ops.join("\n"))}`;
@@ -779,11 +854,13 @@ class ArrayPanel {
         }
       }
       // misc: init_data / ops が設定されていれば一緒に送る
-      if (type === "misc" && this._initData && this._initData.length > 0) {
-        body.init_data = this._initData;
-      }
-      if (type === "misc" && this._ops && this._ops.length > 0) {
-        body.ops = this._ops;
+      if (type === "misc") {
+        // ハッシュ関数対応アルゴはハッシュ関数トークンも init_data に追加
+        const supportsHashFunc = _algoSupportsHashFunc(algoId);
+        const initTokens = [...(this._initData || [])];
+        if (supportsHashFunc && this._hashFunc) initTokens.push(this._hashFunc);
+        if (initTokens.length > 0) body.init_data = initTokens;
+        if (this._ops && this._ops.length > 0) body.ops = this._ops;
       }
 
       const res = await fetch("/api/start", {

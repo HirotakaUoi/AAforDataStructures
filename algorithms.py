@@ -2192,10 +2192,11 @@ def hash_open_addressing(n, **kwargs):
     rng = random.Random(kwargs.get("seed", N))
 
     # ── init_data 解析 ───────────────────────────────────────────
-    _idata = kwargs.get("init_data") or []
+    _idata   = kwargs.get("init_data") or []
     _m_tok   = next((t for t in _idata if t.lstrip("-").isdigit()), None)
-    _fn_tok  = next((t for t in _idata if not t.lstrip("-").isdigit()), "mod")
-    _fn_tok  = _fn_tok.lower() if _fn_tok else "mod"
+    _fn_parts = [t for t in _idata if not t.lstrip("-").isdigit()]
+    _fn_raw  = "".join(_fn_parts).strip() if _fn_parts else "mod"
+    _fn_key  = _fn_raw.lower()
 
     if _m_tok is not None and int(_m_tok) > N:
         M = int(_m_tok)
@@ -2204,9 +2205,22 @@ def hash_open_addressing(n, **kwargs):
 
     # ── ハッシュ関数 ─────────────────────────────────────────────
     _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887  (黄金比)
-    if _fn_tok == "mult":
+    if _fn_key == "mult":
         def h(k): return int(M * ((k * _A) % 1))
         func_label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
+    elif _fn_key == "square":
+        def h(k, _M=M): return (k * k) % _M
+        func_label = f"h(k) = k² mod {M}"
+    elif _fn_key not in ("mod", ""):
+        # カスタム式: k と m を変数として eval（制限付き）
+        _formula = _fn_raw
+        def h(k, _f=_formula, _M=M):
+            try:
+                return int(eval(_f, {"__builtins__": None},
+                                {"k": k, "m": _M, "int": int, "abs": abs})) % _M
+            except Exception:
+                return k % _M
+        func_label = f"h(k) = {_formula}  (m={M})"
     else:   # mod (default)
         def h(k): return k % M
         func_label = f"h(k) = k mod {M}"
@@ -2299,10 +2313,11 @@ def hash_chaining(n, **kwargs):
     rng = random.Random(kwargs.get("seed", N))
 
     # ── init_data 解析 ───────────────────────────────────────────
-    _idata  = kwargs.get("init_data") or []
-    _m_tok  = next((t for t in _idata if t.lstrip("-").isdigit()), None)
-    _fn_tok = next((t for t in _idata if not t.lstrip("-").isdigit()), "mod")
-    _fn_tok = _fn_tok.lower() if _fn_tok else "mod"
+    _idata    = kwargs.get("init_data") or []
+    _m_tok    = next((t for t in _idata if t.lstrip("-").isdigit()), None)
+    _fn_parts = [t for t in _idata if not t.lstrip("-").isdigit()]
+    _fn_raw   = "".join(_fn_parts).strip() if _fn_parts else "mod"
+    _fn_key   = _fn_raw.lower()
 
     if _m_tok is not None and int(_m_tok) >= 2:
         M = int(_m_tok)
@@ -2311,9 +2326,22 @@ def hash_chaining(n, **kwargs):
 
     # ── ハッシュ関数 ─────────────────────────────────────────────
     _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887
-    if _fn_tok == "mult":
+    if _fn_key == "mult":
         def h(k): return int(M * ((k * _A) % 1))
         func_label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
+    elif _fn_key == "square":
+        def h(k, _M=M): return (k * k) % _M
+        func_label = f"h(k) = k² mod {M}"
+    elif _fn_key not in ("mod", ""):
+        # カスタム式: k と m を変数として eval（制限付き）
+        _formula = _fn_raw
+        def h(k, _f=_formula, _M=M):
+            try:
+                return int(eval(_f, {"__builtins__": None},
+                                {"k": k, "m": _M, "int": int, "abs": abs})) % _M
+            except Exception:
+                return k % _M
+        func_label = f"h(k) = {_formula}  (m={M})"
     else:   # mod (default)
         def h(k): return k % M
         func_label = f"h(k) = k mod {M}"
@@ -2890,10 +2918,12 @@ AlgorithmList = [
     # ── Ch.10: ハッシュ表 ──
     ("ハッシュ表 開番地法  (Ch.10)", hash_open_addressing,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
-      "init_data_hint": "例: 13 mod  または  13 mult  (m=表サイズ, func=mod|mult)"}),
+      "init_data_hint": "例: 13  (空欄=自動)  ハッシュ表サイズ m",
+      "hash_func": True}),
     ("ハッシュ表 チェイン法  (Ch.10)", hash_chaining,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
-      "init_data_hint": "例: 7 mod  または  7 mult  (m=バケツ数, func=mod|mult)"}),
+      "init_data_hint": "例: 7  (空欄=自動)  バケツ数 m",
+      "hash_func": True}),
 ]
 
 DataSizeList = [8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256]
