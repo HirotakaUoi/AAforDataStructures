@@ -158,8 +158,8 @@ _hash_obj(id, slots, m, label="", active=-1, weight=1)
 | 連結リストキュー | Enqueue する値列 | (整数リスト) |
 | 配列スタック | Push する値列（最大8件） | (整数リスト) |
 | 循環キュー | 最初の Enqueue 値列（最大6件） | (整数リスト) |
-| ハッシュ表 開番地法 | `m [func]`（例: `13 mod` / `13 mult`） | `"expr"` |
-| ハッシュ表 チェイン法 | `m [func]`（例: `7 mod` / `7 mult`） | `"expr"` |
+| ハッシュ表 開番地法 | `m`（例: `13`）ハッシュ関数は別行 UI で選択 | `"expr"` |
+| ハッシュ表 チェイン法 | `m`（例: `7`）ハッシュ関数は別行 UI で選択 | `"expr"` |
 | RPN 評価・配列スタック | A型式（例: `2 3 + 8 1 - *`） | `"expr"` |
 | RPN 評価・連結リストスタック | A型式（例: `2 3 + 8 1 - *`） | `"expr"` |
 | RPN 変換・評価 | B型式・中置（例: `(2+3)*(8-1)`） | `"expr"` |
@@ -241,7 +241,7 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v25** |
+| `static/js/app.js` | **v26** |
 | `static/js/array_canvas.js` | **v40** |
 | `static/js/ws_client.js` | v1 |
 | `static/css/style.css` | v4 |
@@ -252,6 +252,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-05-13 | ハッシュ表 2本: ハッシュ関数選択 UI 追加 (app.js v25→v26) — 除算法/乗算法/二乗法/カスタム式ドロップダウン |
 | 2026-05-11 | drag/resize を Pointer Events API に統一 — `setPointerCapture` で軸ロック完全解消 (app.js v24→v25) |
 | 2026-05-10 | タッチドラッグ軸ロックバグ修正 — `onMove` 内に `preventDefault()` 追加 / スナップをリリース時のみ適用 (app.js v22→v24) |
 | 2026-05-10 | RPN 式入力バグ修正 — `.inp-algo`→`.sel-algo`、A型式トークン分割修正 (app.js v20→v22) |
