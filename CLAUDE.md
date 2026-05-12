@@ -210,8 +210,7 @@ cd AAforDataStructures && python -m uvicorn main:app --port 8006
 | Ch.3 | vector capacity (2倍拡張), vector capacity (固定+16拡張), vector 操作, イテレータ・3要素合計 |
 | Ch.4 | 片方向連結リスト, イテレータ・4要素平均, 双方向連結リスト |
 | Ch.5 | 連結リストスタック, 連結リストキュー, 配列スタック, 循環キュー, RPN 変換・評価 |
-| Ch.6 | BST 挿入・探索・削除 |
-| Ch.7 | 二分木の走査 BFS/DFS, 演算木の構築 |
+| Ch.7 | BST 挿入・探索・削除, 二分木の走査 BFS/DFS, 演算木の構築 |
 | Ch.8 | 赤黒木 挿入, AVL木 挿入・探索・削除, B木 挿入 |
 | Ch.10 | ハッシュ表 開番地法, ハッシュ表 チェイン法 |
 | Ch.11 | 深さ優先探索 DFS, 幅優先探索 BFS |

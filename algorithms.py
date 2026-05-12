@@ -1411,7 +1411,7 @@ def rpn_direct_b(n, **kwargs):
 
 
 # ===========================================================================
-# Ch.6: 二分探索木 (type: "misc")
+# Ch.7: 二分探索木 (type: "misc")
 # ===========================================================================
 
 # ─── BST helpers ─────────────────────────────────────────────────────────
@@ -1477,12 +1477,12 @@ def _bst_delete(tree, key):
 
 
 def bst_operations(n, **kwargs):
-    """Ch.6: 二分探索木 (BST) の挿入・探索・削除"""
+    """Ch.7: 二分探索木 (BST) の挿入・探索・削除"""
     N   = max(5, min(int(n), 24))
     rng = random.Random(kwargs.get("seed", N))
     vals = rng.sample(range(1, 200), N)
 
-    base = [{"message": f"二分探索木 (BST)  N={N}  (Ch.6)", "color": "white"}]
+    base = [{"message": f"二分探索木 (BST)  N={N}  (Ch.7)", "color": "white"}]
 
     tree = None
 
@@ -2828,9 +2828,8 @@ AlgorithmList = [
     ("B型式 直接計算  (Ch.5)",      rpn_direct_b,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
       "init_data_hint": "例: (((2)+(3))*((8)-(1)))"}),
-    # ── Ch.6: 二分探索木 ──
-    ("BST 挿入・探索・削除  (Ch.6)", bst_operations,    {"type": "misc"}),
-    # ── Ch.7: 二分木走査 / 演算木 ──
+    # ── Ch.7: 二分探索木 / 二分木走査 / 演算木 ──
+    ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc"}),
     ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc"}),
     ("演算木の構築  (Ch.7)",         expression_tree,   {"type": "misc"}),
     # ── Ch.8: 赤黒木・B木 ──
