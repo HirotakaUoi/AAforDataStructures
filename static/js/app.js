@@ -69,6 +69,28 @@ function _algoSupportsHashFunc(algoId) {
   return !!(algo?.meta?.hash_func);
 }
 
+/** キー型ごとのハッシュ関数オプション */
+const _KEY_TYPE_FUNCS = {
+  int:   [
+    {v:"mod",    l:"除算法  h(k) = k mod m"},
+    {v:"mult",   l:"乗算法  h(k) = ⌊m·(k·A mod 1)⌋"},
+    {v:"square", l:"二乗法  h(k) = k² mod m"},
+    {v:"custom", l:"カスタム… (変数: k=整数, m)"},
+  ],
+  str:   [
+    {v:"sum",    l:"加算折り畳み法  h(k) = Σord(c) mod m"},
+    {v:"poly",   l:"多項式ハッシュ  h(k) = Σ(ord(c)·31ⁱ) mod m"},
+    {v:"mult",   l:"乗算折り畳み法  h(k) = ⌊m·(Σord(c)·A mod 1)⌋"},
+    {v:"custom", l:"カスタム… (変数: k=文字列, m, ord, sum, len)"},
+  ],
+  float: [
+    {v:"mult",   l:"乗算法  h(k) = ⌊m·(k·A mod 1)⌋"},
+    {v:"trunc",  l:"切り捨て  h(k) = ⌊k⌋ mod m"},
+    {v:"scale",  l:"スケール  h(k) = ⌊k×100⌋ mod m"},
+    {v:"custom", l:"カスタム… (変数: k=実数, m, int, round, abs)"},
+  ],
+};
+
 // ===== 起動 ========================================================
 window.addEventListener("DOMContentLoaded", async () => {
   await loadMeta();
@@ -231,6 +253,7 @@ class ArrayPanel {
     this._initData         = null; // ユーザー指定の初期配列（init_data 対応アルゴのみ）
     this._ops              = null; // ユーザー指定の操作列（ops 対応アルゴのみ）
     this._hashFunc         = null; // ユーザー指定のハッシュ関数（hash_func 対応アルゴのみ）
+    this._keyType          = null; // ユーザー指定のキー型: null | "int" | "str" | "float"
   }
 
   // ── DOM 構築 ────────────────────────────────────────────────────
@@ -327,6 +350,16 @@ class ArrayPanel {
           <button class="btn btn-secondary btn-clear-ops" style="white-space:nowrap;font-size:0.82em">クリア</button>
         </div>
         <span class="ops-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;align-self:flex-start;margin-top:4px"></span>
+      </div>
+
+      <div class="params-row key-type-row" style="display:none">
+        <label class="row-label" style="white-space:nowrap;margin-right:6px">キー型</label>
+        <select class="sel-key-type" style="flex:0 0 auto;max-width:200px">
+          <option value="int">整数 (integer)</option>
+          <option value="str">文字列 (string)</option>
+          <option value="float">実数 (float)</option>
+        </select>
+        <span class="key-type-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:8px"></span>
       </div>
 
       <div class="params-row hash-func-row" style="display:none">
@@ -426,13 +459,21 @@ class ArrayPanel {
       this.el.querySelector(".inp-ops").placeholder = phLines;
     }
 
-    // ハッシュ関数行
+    // キー型行 & ハッシュ関数行
+    this.el.querySelector(".key-type-row") .style.display = hasHashFunc ? "" : "none";
     this.el.querySelector(".hash-func-row").style.display = hasHashFunc ? "" : "none";
     if (!hasHashFunc) {
+      this._keyType  = null;
       this._hashFunc = null;
+      this.el.querySelector(".sel-key-type").value = "int";
+      this.el.querySelector(".key-type-info").textContent = "";
       this.el.querySelector(".sel-hash-func").value = "mod";
       this.el.querySelector(".inp-hash-custom").style.display = "none";
       this.el.querySelector(".hash-func-info").textContent = "";
+    } else {
+      // キー型が変わっていればドロップダウンを再構築
+      const currentKT = this.el.querySelector(".sel-key-type").value || "int";
+      this._rebuildHashFuncOptions(currentKT);
     }
   }
 
@@ -470,6 +511,17 @@ class ArrayPanel {
       this._ops = null;
       q(".ops-info").style.color = "#aaa";
       q(".ops-info").textContent = "（デフォルト操作列を使用）";
+      if (!this.isRunning) this._drawPreview();
+    });
+
+    // キー型: 変更時にハッシュ関数ドロップダウンを再構築してプレビュー更新
+    q(".sel-key-type").addEventListener("change", () => {
+      const kt = q(".sel-key-type").value;
+      this._keyType  = kt;
+      this._hashFunc = null;  // キー型が変わったらハッシュ関数をリセット
+      this._rebuildHashFuncOptions(kt);
+      q(".hash-func-info").textContent = "";
+      q(".inp-hash-custom").style.display = "none";
       if (!this.isRunning) this._drawPreview();
     });
 
@@ -640,6 +692,23 @@ class ArrayPanel {
     if (!this.isRunning) this._drawPreview();
   }
 
+  // ── ハッシュ関数ドロップダウン再構築 ─────────────────────────
+  _rebuildHashFuncOptions(keyType) {
+    const sel   = this.el.querySelector(".sel-hash-func");
+    const funcs = _KEY_TYPE_FUNCS[keyType] || _KEY_TYPE_FUNCS.int;
+    const prev  = sel.value;
+    sel.innerHTML = "";
+    funcs.forEach(f => {
+      const opt = new Option(f.l, f.v);
+      sel.appendChild(opt);
+    });
+    // 前の選択肢が存在すれば維持、なければ先頭
+    if (funcs.some(f => f.v === prev)) sel.value = prev;
+    // カスタム入力欄の可視状態を同期
+    this.el.querySelector(".inp-hash-custom").style.display =
+      sel.value === "custom" ? "" : "none";
+  }
+
   // ── ハッシュ関数の解析・適用 ───────────────────────────────────
   _applyHashFunc() {
     const q    = (sel) => this.el.querySelector(sel);
@@ -774,10 +843,13 @@ class ArrayPanel {
     try {
       let previewUrl = `/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`;
       {
-        // init_data: ハッシュ関数対応アルゴはハッシュ関数トークンも追加
+        // init_data: ハッシュ関数対応アルゴはキー型・ハッシュ関数トークンも追加
         const supportsHashFunc = _algoSupportsHashFunc(algoId);
         const initTokens = [...(this._initData || [])];
-        if (supportsHashFunc && this._hashFunc) initTokens.push(this._hashFunc);
+        if (supportsHashFunc) {
+          if (this._keyType  && this._keyType  !== "int") initTokens.push(this._keyType);
+          if (this._hashFunc) initTokens.push(this._hashFunc);
+        }
         if (initTokens.length > 0) {
           previewUrl += `&init_data=${encodeURIComponent(initTokens.join(","))}`;
         }
@@ -855,10 +927,13 @@ class ArrayPanel {
       }
       // misc: init_data / ops が設定されていれば一緒に送る
       if (type === "misc") {
-        // ハッシュ関数対応アルゴはハッシュ関数トークンも init_data に追加
+        // ハッシュ関数対応アルゴはキー型・ハッシュ関数トークンも init_data に追加
         const supportsHashFunc = _algoSupportsHashFunc(algoId);
         const initTokens = [...(this._initData || [])];
-        if (supportsHashFunc && this._hashFunc) initTokens.push(this._hashFunc);
+        if (supportsHashFunc) {
+          if (this._keyType  && this._keyType  !== "int") initTokens.push(this._keyType);
+          if (this._hashFunc) initTokens.push(this._hashFunc);
+        }
         if (initTokens.length > 0) body.init_data = initTokens;
         if (this._ops && this._ops.length > 0) body.ops = this._ops;
       }

@@ -2173,10 +2173,156 @@ def _hash_frame(slots, m, active, base, msg, color="lightgreen", finished=False)
               base + [{"message": msg, "color": color}], finished=finished)
 
 
+# ---------------------------------------------------------------------------
+# ハッシュ表 共通ヘルパー（整数 / 文字列 / 実数 キー対応）
+# ---------------------------------------------------------------------------
+
+_HASH_KEY_TYPE_TOKENS = frozenset({"int", "str", "string", "float", "real"})
+
+def _rand_word(rng, length=3):
+    """ランダムな大文字 3 文字 (子音–母音–子音) 文字列を生成"""
+    _cons = "BCDFGHJKLMNPRSTVWXYZ"
+    _vow  = "AEIOU"
+    return rng.choice(_cons) + rng.choice(_vow) + rng.choice(_cons)
+
+def _gen_hash_keys(rng, N, key_type):
+    """キー型に応じた重複なしキーリストを生成"""
+    if key_type == "str":
+        keys, seen = [], set()
+        attempts = 0
+        while len(keys) < N and attempts < 50000:
+            w = _rand_word(rng)
+            if w not in seen:
+                seen.add(w); keys.append(w)
+            attempts += 1
+        return keys
+    elif key_type == "float":
+        pool = [round(i * 0.1, 1) for i in range(10, 1000)]   # 1.0 〜 99.9
+        return rng.sample(pool, min(N, len(pool)))
+    else:  # int
+        return rng.sample(range(1, 200), N)
+
+def _not_found_hash_key(rng, key_type, existing):
+    """existing に含まれないサンプル探索用キーを 1 つ返す"""
+    if key_type == "str":
+        k = "ZZZ"
+        while k in existing:
+            k = _rand_word(rng)
+        return k
+    elif key_type == "float":
+        k = round(rng.uniform(100.1, 199.9), 1)
+        while k in existing:
+            k = round(rng.uniform(100.1, 199.9), 1)
+        return k
+    else:
+        return next(x for x in range(1, 500) if x not in existing)
+
+def _key_repr(k, key_type):
+    """表示用文字列"""
+    if k is None:       return "None"
+    if key_type == "str":   return f"'{k}'"
+    if key_type == "float": return f"{k:.1f}"
+    return str(k)
+
+def _parse_hash_init_data(idata, default_m):
+    """init_data トークン列から (M, key_type, fn_raw, fn_key) を解析"""
+    m_tok = None
+    key_type = "int"
+    fn_tokens = []
+    for t in (idata or []):
+        tl = t.lower()
+        if t.lstrip("-").isdigit():
+            m_tok = t
+        elif tl in _HASH_KEY_TYPE_TOKENS:
+            key_type = {"string": "str", "real": "float"}.get(tl, tl)
+        else:
+            fn_tokens.append(t)
+    _default_fn = {"int": "mod", "str": "sum", "float": "mult"}
+    fn_raw = "".join(fn_tokens).strip() or _default_fn[key_type]
+    fn_key = fn_raw.lower()
+    M = int(m_tok) if m_tok else default_m
+    return M, key_type, fn_raw, fn_key
+
+def _make_hash_fn(key_type, fn_key, fn_raw, M):
+    """キー型・関数名からハッシュ関数と説明ラベルを返す"""
+    _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887
+
+    if key_type == "str":
+        if fn_key == "sum":
+            def h(k, _M=M): return sum(ord(c) for c in str(k)) % _M
+            label = f"h(k) = Σord(c) mod {M}  [加算折り畳み法]"
+        elif fn_key == "poly":
+            def h(k, _M=M):
+                hv = 0
+                for c in str(k): hv = (hv * 31 + ord(c)) % _M
+                return hv
+            label = f"h(k) = Σ(ord(c)·31ⁱ) mod {M}  [多項式ハッシュ (Horner法)]"
+        elif fn_key == "mult":
+            def h(k, _M=M, _A=_A):
+                return int(_M * ((sum(ord(c) for c in str(k)) * _A) % 1))
+            label = f"h(k) = ⌊{M}·(Σord(c)·A mod 1)⌋  A≈0.618  [乗算折り畳み法]"
+        else:
+            _formula = fn_raw
+            def h(k, _f=_formula, _M=M):
+                try:
+                    return int(eval(_f, {"__builtins__": None},
+                                    {"k": k, "m": _M, "int": int, "abs": abs,
+                                     "ord": ord, "sum": sum, "len": len, "str": str})) % _M
+                except Exception:
+                    return sum(ord(c) for c in str(k)) % _M
+            label = f"h(k) = {fn_raw}  (m={M})"
+
+    elif key_type == "float":
+        if fn_key == "mult":
+            def h(k, _M=M, _A=_A): return int(_M * ((k * _A) % 1))
+            label = f"h(k) = ⌊{M}·(k·A mod 1)⌋  A≈0.618  [乗算法]"
+        elif fn_key == "trunc":
+            def h(k, _M=M): return int(k) % _M
+            label = f"h(k) = ⌊k⌋ mod {M}  [切り捨て]"
+        elif fn_key == "scale":
+            def h(k, _M=M): return int(round(k * 100)) % _M
+            label = f"h(k) = ⌊k×100⌋ mod {M}  [スケール変換]"
+        else:
+            _formula = fn_raw
+            def h(k, _f=_formula, _M=M):
+                try:
+                    return int(eval(_f, {"__builtins__": None},
+                                    {"k": k, "m": _M, "int": int, "abs": abs,
+                                     "round": round, "float": float})) % _M
+                except Exception:
+                    return int(_M * ((k * _A) % 1))
+            label = f"h(k) = {fn_raw}  (m={M})"
+
+    else:  # int
+        if fn_key == "mult":
+            def h(k, _M=M, _A=_A): return int(_M * ((k * _A) % 1))
+            label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
+        elif fn_key == "square":
+            def h(k, _M=M): return (k * k) % _M
+            label = f"h(k) = k² mod {M}"
+        elif fn_key not in ("mod", ""):
+            _formula = fn_raw
+            def h(k, _f=_formula, _M=M):
+                try:
+                    return int(eval(_f, {"__builtins__": None},
+                                    {"k": k, "m": _M, "int": int, "abs": abs})) % _M
+                except Exception:
+                    return k % _M
+            label = f"h(k) = {fn_raw}  (m={M})"
+        else:  # mod (default)
+            def h(k, _M=M): return k % _M
+            label = f"h(k) = k mod {M}"
+
+    return h, label
+
+
 def hash_open_addressing(n, **kwargs):
     """Ch.10: 開番地法 (線形探索) によるハッシュ表
-    init_data: [m] or [m, func]  func = 'mod'(default) | 'mult'
-    例: '13 mod'  '11 mult'  '17'
+    init_data: [m] [key_type] [func]
+      key_type: int(default) | str | float
+      func(int):   mod(default) | mult | square | <式>
+      func(str):   sum(default) | poly | mult | <式>
+      func(float): mult(default) | trunc | scale | <式>
     """
     def _next_prime(x):
         def _is_prime(v):
@@ -2192,43 +2338,20 @@ def hash_open_addressing(n, **kwargs):
     rng = random.Random(kwargs.get("seed", N))
 
     # ── init_data 解析 ───────────────────────────────────────────
-    _idata   = kwargs.get("init_data") or []
-    _m_tok   = next((t for t in _idata if t.lstrip("-").isdigit()), None)
-    _fn_parts = [t for t in _idata if not t.lstrip("-").isdigit()]
-    _fn_raw  = "".join(_fn_parts).strip() if _fn_parts else "mod"
-    _fn_key  = _fn_raw.lower()
-
-    if _m_tok is not None and int(_m_tok) > N:
-        M = int(_m_tok)
-    else:
-        M = _next_prime(max(11, int(N * 1.6)))   # 空きスロットを確保する素数
+    _idata  = kwargs.get("init_data") or []
+    _def_m  = _next_prime(max(11, int(N * 1.6)))
+    M, key_type, fn_raw, fn_key = _parse_hash_init_data(_idata, _def_m)
+    if M <= N:   # 開番地法: N より十分大きい素数であること
+        M = _next_prime(max(11, int(N * 1.6)))
 
     # ── ハッシュ関数 ─────────────────────────────────────────────
-    _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887  (黄金比)
-    if _fn_key == "mult":
-        def h(k): return int(M * ((k * _A) % 1))
-        func_label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
-    elif _fn_key == "square":
-        def h(k, _M=M): return (k * k) % _M
-        func_label = f"h(k) = k² mod {M}"
-    elif _fn_key not in ("mod", ""):
-        # カスタム式: k と m を変数として eval（制限付き）
-        _formula = _fn_raw
-        def h(k, _f=_formula, _M=M):
-            try:
-                return int(eval(_f, {"__builtins__": None},
-                                {"k": k, "m": _M, "int": int, "abs": abs})) % _M
-            except Exception:
-                return k % _M
-        func_label = f"h(k) = {_formula}  (m={M})"
-    else:   # mod (default)
-        def h(k): return k % M
-        func_label = f"h(k) = k mod {M}"
+    h, func_label = _make_hash_fn(key_type, fn_key, fn_raw, M)
 
-    INSERT_VALS = rng.sample(range(1, 200), N)
+    INSERT_VALS = _gen_hash_keys(rng, N, key_type)
+    kt_label    = {"int": "整数", "str": "文字列", "float": "実数"}[key_type]
 
     base = [
-        {"message": f"ハッシュ表 (開番地法/線形探索)  m={M}  (Ch.10)", "color": "white"},
+        {"message": f"ハッシュ表 (開番地法/線形探索)  m={M}  キー: {kt_label}  (Ch.10)", "color": "white"},
         {"message": func_label, "color": "cyan"},
     ]
 
@@ -2238,6 +2361,7 @@ def hash_open_addressing(n, **kwargs):
     yield _hash_frame(slots, M, -1, base, f"ハッシュ表初期化  m={M}")
 
     for v in INSERT_VALS:
+        kr    = _key_repr(v, key_type)
         idx   = h(v)
         probe = idx
         steps = 0
@@ -2246,7 +2370,7 @@ def hash_open_addressing(n, **kwargs):
             slots_tmp = [_hash_slot(table[i]) for i in range(M)]
             slots_tmp[probe] = _hash_slot(table[probe], hl="#ff8844")
             yield _hash_frame(slots_tmp, M, probe, base,
-                              f"insert({v}): h({v})={idx}  [{probe}] 衝突!  次のスロットへ",
+                              f"insert({kr}): h({kr})={idx}  [{probe}] 衝突!  次のスロットへ",
                               color="orange")
             probe = (probe + 1) % M
             steps += 1
@@ -2255,15 +2379,17 @@ def hash_open_addressing(n, **kwargs):
         slots = [_hash_slot(table[i]) for i in range(M)]
         slots[probe] = _hash_slot(v, hl="#44ff88")
         yield _hash_frame(slots, M, probe, base,
-                          f"insert({v}): h({v})={idx}  → [{probe}] に格納"
+                          f"insert({kr}): h({kr})={idx}  → [{probe}] に格納"
                           + (f"  (探索{steps}回)" if steps > 0 else ""),
                           color="lightgreen")
         slots = [_hash_slot(table[i]) for i in range(M)]
 
     # 探索フェーズ
-    not_in_oa = next(x for x in range(1, 200) if x not in set(INSERT_VALS))
-    search_targets = [INSERT_VALS[1], INSERT_VALS[N//2], not_in_oa]
+    existing = set(INSERT_VALS)
+    not_in   = _not_found_hash_key(rng, key_type, existing)
+    search_targets = [INSERT_VALS[1], INSERT_VALS[N//2], not_in]
     for target in search_targets:
+        kr    = _key_repr(target, key_type)
         idx   = h(target)
         probe = idx
         steps = 0
@@ -2271,8 +2397,9 @@ def hash_open_addressing(n, **kwargs):
         while steps < M:
             slots_tmp = [_hash_slot(table[i]) for i in range(M)]
             slots_tmp[probe] = _hash_slot(table[probe], hl="yellow")
+            tab_r = _key_repr(table[probe], key_type)
             yield _hash_frame(slots_tmp, M, probe, base,
-                              f"search({target}): h({target})={idx}  [{probe}]={table[probe]}"
+                              f"search({kr}): h({kr})={idx}  [{probe}]={tab_r}"
                               f"  {'→ 発見!' if table[probe]==target else '→ 次へ'}",
                               color="lightgreen" if table[probe] == target else "cyan")
             if table[probe] == target:
@@ -2286,7 +2413,7 @@ def hash_open_addressing(n, **kwargs):
         if found:
             slots_tmp[probe] = _hash_slot(table[probe], hl="#44ff88")
         yield _hash_frame(slots_tmp, M, -1, base,
-                          f"search({target}): {'Found' if found else 'Not Found'}",
+                          f"search({kr}): {'Found' if found else 'Not Found'}",
                           color="#44ff88" if found else "#ff6655")
         slots = [_hash_slot(table[i]) for i in range(M)]
 
@@ -2296,8 +2423,11 @@ def hash_open_addressing(n, **kwargs):
 
 def hash_chaining(n, **kwargs):
     """Ch.10: チェイン法によるハッシュ表
-    init_data: [m] or [m, func]  func = 'mod'(default) | 'mult'
-    例: '7 mod'  '5 mult'  '11'
+    init_data: [m] [key_type] [func]
+      key_type: int(default) | str | float
+      func(int):   mod(default) | mult | square | <式>
+      func(str):   sum(default) | poly | mult | <式>
+      func(float): mult(default) | trunc | scale | <式>
     """
     def _next_prime(x):
         def _is_prime(v):
@@ -2313,43 +2443,20 @@ def hash_chaining(n, **kwargs):
     rng = random.Random(kwargs.get("seed", N))
 
     # ── init_data 解析 ───────────────────────────────────────────
-    _idata    = kwargs.get("init_data") or []
-    _m_tok    = next((t for t in _idata if t.lstrip("-").isdigit()), None)
-    _fn_parts = [t for t in _idata if not t.lstrip("-").isdigit()]
-    _fn_raw   = "".join(_fn_parts).strip() if _fn_parts else "mod"
-    _fn_key   = _fn_raw.lower()
-
-    if _m_tok is not None and int(_m_tok) >= 2:
-        M = int(_m_tok)
-    else:
-        M = _next_prime(max(5, N // 2))          # チェイン法: バケツ数 ≈ N/2
+    _idata  = kwargs.get("init_data") or []
+    _def_m  = _next_prime(max(5, N // 2))
+    M, key_type, fn_raw, fn_key = _parse_hash_init_data(_idata, _def_m)
+    if M < 2:
+        M = _next_prime(max(5, N // 2))
 
     # ── ハッシュ関数 ─────────────────────────────────────────────
-    _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887
-    if _fn_key == "mult":
-        def h(k): return int(M * ((k * _A) % 1))
-        func_label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
-    elif _fn_key == "square":
-        def h(k, _M=M): return (k * k) % _M
-        func_label = f"h(k) = k² mod {M}"
-    elif _fn_key not in ("mod", ""):
-        # カスタム式: k と m を変数として eval（制限付き）
-        _formula = _fn_raw
-        def h(k, _f=_formula, _M=M):
-            try:
-                return int(eval(_f, {"__builtins__": None},
-                                {"k": k, "m": _M, "int": int, "abs": abs})) % _M
-            except Exception:
-                return k % _M
-        func_label = f"h(k) = {_formula}  (m={M})"
-    else:   # mod (default)
-        def h(k): return k % M
-        func_label = f"h(k) = k mod {M}"
+    h, func_label = _make_hash_fn(key_type, fn_key, fn_raw, M)
 
-    INSERT_VALS = rng.sample(range(1, 200), N)
+    INSERT_VALS = _gen_hash_keys(rng, N, key_type)
+    kt_label    = {"int": "整数", "str": "文字列", "float": "実数"}[key_type]
 
     base = [
-        {"message": f"ハッシュ表 (チェイン法)  m={M}  (Ch.10)", "color": "white"},
+        {"message": f"ハッシュ表 (チェイン法)  m={M}  キー: {kt_label}  (Ch.10)", "color": "white"},
         {"message": func_label, "color": "cyan"},
     ]
 
@@ -2368,34 +2475,39 @@ def hash_chaining(n, **kwargs):
     yield _hash_frame(make_slots(), M, -1, base, f"ハッシュ表初期化  m={M}")
 
     for v in INSERT_VALS:
+        kr  = _key_repr(v, key_type)
         idx = h(v)
         chains[idx].append(v)
+        chain_repr = [_key_repr(x, key_type) for x in chains[idx]]
         slots = make_slots(hl_idx=idx, hl_chain_idx=len(chains[idx])-1)
         yield _hash_frame(slots, M, idx, base,
-                          f"insert({v}): h({v})={idx}  → チェイン[{idx}]に追加  {list(chains[idx])}",
+                          f"insert({kr}): h({kr})={idx}  → チェイン[{idx}]に追加  {chain_repr}",
                           color="lightgreen")
 
     # 探索
-    not_in_ch = next(x for x in range(1, 200) if x not in set(INSERT_VALS))
-    search_targets = [INSERT_VALS[0], INSERT_VALS[N//2], not_in_ch]
+    existing = set(INSERT_VALS)
+    not_in   = _not_found_hash_key(rng, key_type, existing)
+    search_targets = [INSERT_VALS[0], INSERT_VALS[N//2], not_in]
     for target in search_targets:
+        kr  = _key_repr(target, key_type)
         idx = h(target)
         slots = make_slots(hl_idx=idx)
         yield _hash_frame(slots, M, idx, base,
-                          f"search({target}): h({target})={idx}  → チェイン[{idx}]を線形探索",
+                          f"search({kr}): h({kr})={idx}  → チェイン[{idx}]を線形探索",
                           color="cyan")
         found = False
         for j, v in enumerate(chains[idx]):
+            vr = _key_repr(v, key_type)
             s2 = make_slots(hl_idx=idx, hl_chain_idx=j)
             yield _hash_frame(s2, M, idx, base,
-                              f"search({target}): chain[{idx}][{j}]={v}  {'→ 発見!' if v==target else '→ 次へ'}",
+                              f"search({kr}): chain[{idx}][{j}]={vr}  {'→ 発見!' if v==target else '→ 次へ'}",
                               color="lightgreen" if v == target else "cyan")
             if v == target:
                 found = True
                 break
         if not found:
             yield _hash_frame(make_slots(), M, -1, base,
-                              f"search({target}): Not Found", color="#ff6655")
+                              f"search({kr}): Not Found", color="#ff6655")
 
     yield _hash_frame(make_slots(), M, -1, base,
                       "ハッシュ表 (チェイン法) 完了", "#44aa44", finished=True)
