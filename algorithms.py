@@ -2174,7 +2174,10 @@ def _hash_frame(slots, m, active, base, msg, color="lightgreen", finished=False)
 
 
 def hash_open_addressing(n, **kwargs):
-    """Ch.10: 開番地法 (線形探索) によるハッシュ表"""
+    """Ch.10: 開番地法 (線形探索) によるハッシュ表
+    init_data: [m] or [m, func]  func = 'mod'(default) | 'mult'
+    例: '13 mod'  '11 mult'  '17'
+    """
     def _next_prime(x):
         def _is_prime(v):
             if v < 2: return False
@@ -2187,17 +2190,38 @@ def hash_open_addressing(n, **kwargs):
 
     N   = max(5, min(int(n), 24))
     rng = random.Random(kwargs.get("seed", N))
-    M   = _next_prime(max(11, int(N * 1.6)))   # 空きスロットを確保する素数
+
+    # ── init_data 解析 ───────────────────────────────────────────
+    _idata = kwargs.get("init_data") or []
+    _m_tok   = next((t for t in _idata if t.lstrip("-").isdigit()), None)
+    _fn_tok  = next((t for t in _idata if not t.lstrip("-").isdigit()), "mod")
+    _fn_tok  = _fn_tok.lower() if _fn_tok else "mod"
+
+    if _m_tok is not None and int(_m_tok) > N:
+        M = int(_m_tok)
+    else:
+        M = _next_prime(max(11, int(N * 1.6)))   # 空きスロットを確保する素数
+
+    # ── ハッシュ関数 ─────────────────────────────────────────────
+    _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887  (黄金比)
+    if _fn_tok == "mult":
+        def h(k): return int(M * ((k * _A) % 1))
+        func_label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
+    else:   # mod (default)
+        def h(k): return k % M
+        func_label = f"h(k) = k mod {M}"
+
     INSERT_VALS = rng.sample(range(1, 200), N)
 
-    base = [{"message": f"ハッシュ表 (開番地法/線形探索)  m={M}  (Ch.10)", "color": "white"}]
+    base = [
+        {"message": f"ハッシュ表 (開番地法/線形探索)  m={M}  (Ch.10)", "color": "white"},
+        {"message": func_label, "color": "cyan"},
+    ]
 
     table  = [None] * M   # None = 空
     slots  = [_hash_slot() for _ in range(M)]
 
-    def h(k): return k % M
-
-    yield _hash_frame(slots, M, -1, base, f"ハッシュ表初期化  m={M}  h(k) = k mod {M}")
+    yield _hash_frame(slots, M, -1, base, f"ハッシュ表初期化  m={M}")
 
     for v in INSERT_VALS:
         idx   = h(v)
@@ -2217,7 +2241,7 @@ def hash_open_addressing(n, **kwargs):
         slots = [_hash_slot(table[i]) for i in range(M)]
         slots[probe] = _hash_slot(v, hl="#44ff88")
         yield _hash_frame(slots, M, probe, base,
-                          f"insert({v}): [{probe}] に格納  h({v})={idx}"
+                          f"insert({v}): h({v})={idx}  → [{probe}] に格納"
                           + (f"  (探索{steps}回)" if steps > 0 else ""),
                           color="lightgreen")
         slots = [_hash_slot(table[i]) for i in range(M)]
@@ -2234,7 +2258,8 @@ def hash_open_addressing(n, **kwargs):
             slots_tmp = [_hash_slot(table[i]) for i in range(M)]
             slots_tmp[probe] = _hash_slot(table[probe], hl="yellow")
             yield _hash_frame(slots_tmp, M, probe, base,
-                              f"search({target}): [{probe}]={table[probe]}  {'→ 発見!' if table[probe]==target else '→ 次へ'}",
+                              f"search({target}): h({target})={idx}  [{probe}]={table[probe]}"
+                              f"  {'→ 発見!' if table[probe]==target else '→ 次へ'}",
                               color="lightgreen" if table[probe] == target else "cyan")
             if table[probe] == target:
                 found = True
@@ -2256,7 +2281,10 @@ def hash_open_addressing(n, **kwargs):
 
 
 def hash_chaining(n, **kwargs):
-    """Ch.10: チェイン法によるハッシュ表"""
+    """Ch.10: チェイン法によるハッシュ表
+    init_data: [m] or [m, func]  func = 'mod'(default) | 'mult'
+    例: '7 mod'  '5 mult'  '11'
+    """
     def _next_prime(x):
         def _is_prime(v):
             if v < 2: return False
@@ -2269,14 +2297,35 @@ def hash_chaining(n, **kwargs):
 
     N   = max(5, min(int(n), 24))
     rng = random.Random(kwargs.get("seed", N))
-    M   = _next_prime(max(5, N // 2))          # チェイン法: バケツ数 ≈ N/2
+
+    # ── init_data 解析 ───────────────────────────────────────────
+    _idata  = kwargs.get("init_data") or []
+    _m_tok  = next((t for t in _idata if t.lstrip("-").isdigit()), None)
+    _fn_tok = next((t for t in _idata if not t.lstrip("-").isdigit()), "mod")
+    _fn_tok = _fn_tok.lower() if _fn_tok else "mod"
+
+    if _m_tok is not None and int(_m_tok) >= 2:
+        M = int(_m_tok)
+    else:
+        M = _next_prime(max(5, N // 2))          # チェイン法: バケツ数 ≈ N/2
+
+    # ── ハッシュ関数 ─────────────────────────────────────────────
+    _A = (5 ** 0.5 - 1) / 2   # ≈ 0.6180339887
+    if _fn_tok == "mult":
+        def h(k): return int(M * ((k * _A) % 1))
+        func_label = f"h(k) = ⌊{M} × (k × A mod 1)⌋   A = (√5−1)/2 ≈ 0.618"
+    else:   # mod (default)
+        def h(k): return k % M
+        func_label = f"h(k) = k mod {M}"
+
     INSERT_VALS = rng.sample(range(1, 200), N)
 
-    base = [{"message": f"ハッシュ表 (チェイン法)  m={M}  (Ch.10)", "color": "white"}]
+    base = [
+        {"message": f"ハッシュ表 (チェイン法)  m={M}  (Ch.10)", "color": "white"},
+        {"message": func_label, "color": "cyan"},
+    ]
 
     chains = [[] for _ in range(M)]
-
-    def h(k): return k % M
 
     def make_slots(hl_idx=-1, hl_chain_idx=-1):
         s = []
@@ -2288,15 +2337,14 @@ def hash_chaining(n, **kwargs):
                        "chainHL": {hl_chain_idx: "#44ff88"} if hl_chain_idx >= 0 and i == hl_idx else {}})
         return s
 
-    yield _hash_frame(make_slots(), M, -1, base,
-                      f"ハッシュ表初期化  m={M}  h(k) = k mod {M}")
+    yield _hash_frame(make_slots(), M, -1, base, f"ハッシュ表初期化  m={M}")
 
     for v in INSERT_VALS:
         idx = h(v)
         chains[idx].append(v)
         slots = make_slots(hl_idx=idx, hl_chain_idx=len(chains[idx])-1)
         yield _hash_frame(slots, M, idx, base,
-                          f"insert({v}): h({v})={idx}  チェイン[{idx}]に追加  → {list(chains[idx])}",
+                          f"insert({v}): h({v})={idx}  → チェイン[{idx}]に追加  {list(chains[idx])}",
                           color="lightgreen")
 
     # 探索
@@ -2306,7 +2354,7 @@ def hash_chaining(n, **kwargs):
         idx = h(target)
         slots = make_slots(hl_idx=idx)
         yield _hash_frame(slots, M, idx, base,
-                          f"search({target}): h({target})={idx}  チェイン[{idx}]を線形探索",
+                          f"search({target}): h({target})={idx}  → チェイン[{idx}]を線形探索",
                           color="cyan")
         found = False
         for j, v in enumerate(chains[idx]):
@@ -2840,8 +2888,12 @@ AlgorithmList = [
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),
     ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc"}),
     # ── Ch.10: ハッシュ表 ──
-    ("ハッシュ表 開番地法  (Ch.10)", hash_open_addressing, {"type": "misc"}),
-    ("ハッシュ表 チェイン法  (Ch.10)", hash_chaining,    {"type": "misc"}),
+    ("ハッシュ表 開番地法  (Ch.10)", hash_open_addressing,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: 13 mod  または  13 mult  (m=表サイズ, func=mod|mult)"}),
+    ("ハッシュ表 チェイン法  (Ch.10)", hash_chaining,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: 7 mod  または  7 mult  (m=バケツ数, func=mod|mult)"}),
 ]
 
 DataSizeList = [8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256]
