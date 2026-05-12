@@ -2360,10 +2360,11 @@ class ArrayCanvas {
     const PAD_L  = 48;   // index labels
     const PAD_R  = 8;
 
-    const availH  = areaH - PAD_T - PAD_B;
-    const cellH   = Math.max(14, Math.min(38, availH / m));
-    const cellW   = Math.max(50, cw - PAD_L - PAD_R - 160);  // leave room for chain
-    const startX  = PAD_L + (cw - PAD_L - PAD_R - 160 - cellW) / 2 + PAD_L;
+    const availH    = areaH - PAD_T - PAD_B;
+    const cellH     = Math.max(14, Math.min(38, availH / m));
+    const cellW     = 60;                          // ハッシュキーは短い整数 — 固定幅
+    const CHAIN_ROOM = 160;
+    const startX    = PAD_L + Math.max(0, Math.floor((cw - PAD_L - PAD_R - cellW - CHAIN_ROOM) / 2));
     const chainStart = startX + cellW + 8;
 
     ctx.save();
