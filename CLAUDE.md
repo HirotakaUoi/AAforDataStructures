@@ -241,7 +241,7 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v26** |
+| `static/js/app.js` | **v27** |
 | `static/js/array_canvas.js` | **v40** |
 | `static/js/ws_client.js` | v1 |
 | `static/css/style.css` | v4 |
@@ -252,6 +252,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-05-13 | ハッシュ表: 文字列・実数キー対応 (app.js v26→v27) — キー型選択 UI + sum/poly/trunc/scale ハッシュ関数追加 |
 | 2026-05-13 | ハッシュ表 2本: ハッシュ関数選択 UI 追加 (app.js v25→v26) — 除算法/乗算法/二乗法/カスタム式ドロップダウン |
 | 2026-05-11 | drag/resize を Pointer Events API に統一 — `setPointerCapture` で軸ロック完全解消 (app.js v24→v25) |
 | 2026-05-10 | タッチドラッグ軸ロックバグ修正 — `onMove` 内に `preventDefault()` 追加 / スナップをリリース時のみ適用 (app.js v22→v24) |
