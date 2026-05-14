@@ -2986,6 +2986,207 @@ def expression_tree(n, **kwargs):
 # アルゴリズム一覧 / データサイズ一覧
 # ===========================================================================
 
+# ===========================================================================
+# Ch.6: Sample6_1 — ソート+二分探索 vs 逐次探索 (type: "misc")
+# ===========================================================================
+
+def _a(id, values, label="", hl=None, target=None, weight=1):
+    return {"id": id, "type": "array1d", "values": list(values), "label": label,
+            "highlights": {str(k): v for k, v in (hl or {}).items()},
+            "fills": [], "pointer": None, "watchman_index": None,
+            "target": target, "log_scale": False, "weight": weight}
+
+
+def _qs_gen(arr):
+    """クイックソート（Hoare ライク二方向走査）— arr をインプレース整列しながらフレームを yield"""
+    stack = [(0, len(arr) - 1)]
+    while stack:
+        lo, hi = stack.pop()
+        if lo >= hi:
+            continue
+        pivot = arr[hi]
+        i, j = lo, hi - 1
+        while True:
+            while i < hi and arr[i] < pivot:
+                yield list(arr), {i: "yellow", hi: "#ff8844"}
+                i += 1
+            while j >= lo and arr[j] > pivot:
+                yield list(arr), {j: "yellow", hi: "#ff8844"}
+                j -= 1
+            if i >= j:
+                break
+            arr[i], arr[j] = arr[j], arr[i]
+            yield list(arr), {i: "#88ff88", j: "#88ff88", hi: "#ff8844"}
+            i += 1
+            j -= 1
+        arr[i], arr[hi] = arr[hi], arr[i]
+        p = i
+        yield list(arr), {p: "#44aa44"}
+        if lo < p - 1:   stack.append((lo, p - 1))
+        if p + 1 < hi:   stack.append((p + 1, hi))
+
+
+def _shell_gen(arr):
+    """シェルソート — arr をインプレース整列しながらフレームを yield"""
+    n, gap = len(arr), len(arr) // 2
+    while gap > 0:
+        for i in range(gap, n):
+            temp, j = arr[i], i
+            while j >= gap and arr[j - gap] > temp:
+                yield list(arr), {j: "yellow", j - gap: "#ff8844"}
+                arr[j] = arr[j - gap]
+                j -= gap
+            arr[j] = temp
+            if j != i:
+                yield list(arr), {j: "#88ff88"}
+        gap //= 2
+
+
+def _insert_gen(arr):
+    """挿入ソート — arr をインプレース整列しながらフレームを yield"""
+    for i in range(1, len(arr)):
+        key, j = arr[i], i - 1
+        yield list(arr), {i: "yellow"}
+        while j >= 0 and arr[j] > key:
+            arr[j + 1] = arr[j]
+            yield list(arr), {j + 1: "#ff8844", j: "yellow"}
+            j -= 1
+        arr[j + 1] = key
+        if j + 1 != i:
+            yield list(arr), {j + 1: "#88ff88"}
+
+
+def _bin_search_gen(sorted_arr, target):
+    """二分探索 — (hl_dict, found_idx_or_None) を yield"""
+    lo, hi = 0, len(sorted_arr) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        hl = {i: "#1a3a6a" for i in range(lo, hi + 1)}
+        hl[mid] = "yellow"
+        yield hl, None
+        if sorted_arr[mid] == target:
+            yield {mid: "#44aa44"}, mid
+            return
+        elif sorted_arr[mid] < target:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    yield {}, -1
+
+
+def _seq_search_gen(arr, target):
+    """逐次探索 — (hl_dict, found_idx_or_None) を yield"""
+    for i in range(len(arr)):
+        yield {i: "yellow"}, None
+        if arr[i] == target:
+            yield {i: "#44aa44"}, i
+            return
+    yield {}, -1
+
+
+def sample6_1_binary(n, **kwargs):
+    """Sample6_1: ソートしてから二分探索 × num_searches 回"""
+    import random as _rnd
+    N = max(4, int(n))
+    init_d = kwargs.get("init_data") or []
+    try:
+        num_searches = max(1, int(init_d[0]))
+    except (IndexError, ValueError, TypeError):
+        num_searches = 100
+    sort_method = (kwargs.get("sort_method") or "quick").lower()
+
+    rng_data   = _rnd.Random(N * 7919)
+    rng_target = _rnd.Random(N * 7919 + 1)
+    data = rng_data.sample(range(1, N * 10 + 1), N)
+    arr  = list(data)
+
+    SORT_GEN  = {"quick": _qs_gen, "shell": _shell_gen, "insert": _insert_gen}
+    SORT_NAME = {"quick": "クイックソート", "shell": "シェルソート", "insert": "挿入ソート"}
+    sort_name = SORT_NAME.get(sort_method, "クイックソート")
+    sgen_fn   = SORT_GEN.get(sort_method, _qs_gen)
+
+    base = [{"message": f"Sample6_1  {sort_name} + 二分探索  N={N}  探索{num_searches}回  (Ch.6)",
+             "color": "white"}]
+
+    def frame(arr_state, hl=None, tgt=None, msg="", color="lightgreen", finished=False):
+        return _f([_a("arr", arr_state, label=f"{sort_name} → 二分探索",
+                      hl=hl or {}, target=tgt)],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(arr, msg="初期配列（未整列）")
+
+    for s, hl in sgen_fn(arr):
+        yield frame(s, hl=hl, msg=f"{sort_name} 中...")
+
+    yield frame(arr, msg=f"{sort_name} 完了 — 二分探索開始", color="cyan")
+
+    targets = [rng_target.randint(1, N * 10 + 1) for _ in range(num_searches)]
+    total_steps, found_count = 0, 0
+
+    for idx, tgt in enumerate(targets):
+        steps, result = 0, -1
+        for hl, found in _bin_search_gen(arr, tgt):
+            steps += 1
+            yield frame(arr, hl=hl, tgt=tgt,
+                        msg=f"二分探索 {idx+1}/{num_searches}  target={tgt}  step={steps}")
+            if found is not None:
+                result = found
+        total_steps += steps
+        if result >= 0:
+            found_count += 1
+
+    avg = total_steps / num_searches
+    yield frame(arr,
+                msg=f"完了  {num_searches}回  平均ステップ: {avg:.1f}  発見: {found_count}回",
+                color="cyan", finished=True)
+
+
+def sample6_1_sequential(n, **kwargs):
+    """Sample6_1: 逐次探索 × num_searches 回（未整列のまま）"""
+    import random as _rnd
+    N = max(4, int(n))
+    init_d = kwargs.get("init_data") or []
+    try:
+        num_searches = max(1, int(init_d[0]))
+    except (IndexError, ValueError, TypeError):
+        num_searches = 100
+
+    rng_data   = _rnd.Random(N * 7919)
+    rng_target = _rnd.Random(N * 7919 + 1)
+    data = rng_data.sample(range(1, N * 10 + 1), N)
+    arr  = list(data)
+
+    base = [{"message": f"Sample6_1  逐次探索  N={N}  探索{num_searches}回  (Ch.6)",
+             "color": "white"}]
+
+    def frame(arr_state, hl=None, tgt=None, msg="", color="lightgreen", finished=False):
+        return _f([_a("arr", arr_state, label="逐次探索（未整列）",
+                      hl=hl or {}, target=tgt)],
+                  base + [{"message": msg, "color": color}], finished=finished)
+
+    yield frame(arr, msg="初期配列（未整列）")
+
+    targets = [rng_target.randint(1, N * 10 + 1) for _ in range(num_searches)]
+    total_steps, found_count = 0, 0
+
+    for idx, tgt in enumerate(targets):
+        steps, result = 0, -1
+        for hl, found in _seq_search_gen(arr, tgt):
+            steps += 1
+            yield frame(arr, hl=hl, tgt=tgt,
+                        msg=f"逐次探索 {idx+1}/{num_searches}  target={tgt}  step={steps}")
+            if found is not None:
+                result = found
+        total_steps += steps
+        if result >= 0:
+            found_count += 1
+
+    avg = total_steps / num_searches
+    yield frame(arr,
+                msg=f"完了  {num_searches}回  平均ステップ: {avg:.1f}  発見: {found_count}回",
+                color="cyan", finished=True)
+
+
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
     ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
@@ -3016,6 +3217,17 @@ AlgorithmList = [
     ("B型式 直接計算  (Ch.5)",      rpn_direct_b,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
       "init_data_hint": "例: (((2)+(3))*((8)-(1)))"}),
+    # ── Ch.6: ソート+二分探索 / 逐次探索 ──
+    ("ソート+二分探索  (Ch.6)", sample6_1_binary,
+     {"type": "misc", "sort_method": True,
+      "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "（例: 100）  省略時=100",
+      "init_data_label": "探索回数"}),
+    ("逐次探索  (Ch.6)", sample6_1_sequential,
+     {"type": "misc",
+      "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "（例: 100）  省略時=100",
+      "init_data_label": "探索回数"}),
     # ── Ch.7: 二分探索木 / 二分木走査 / 演算木 ──
     ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc"}),
     ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc"}),
@@ -3028,7 +3240,7 @@ AlgorithmList = [
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),
     ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc"}),
     # ── Ch.10: ハッシュ表 ──
-    ("ハッシュ表 開番地法  (Ch.10)", hash_open_addressing,
+    ("ハッシュ表 オープンアドレス法  (Ch.10)", hash_open_addressing,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
       "init_data_hint": "例: 13  (空欄=自動)  ハッシュ表サイズ m",
       "hash_func": True}),

@@ -250,7 +250,7 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v27** |
+| `static/js/app.js` | **v30** |
 | `static/js/array_canvas.js` | **v41** |
 | `static/js/ws_client.js` | v1 |
 | `static/css/style.css` | v4 |
@@ -261,6 +261,9 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-05-15 | クイックソート分割を Hoare ライク二方向走査に変更 / データ数上限64→撤廃 / 探索回数ラベル・UI整理 (app.js v29→v30) |
+| 2026-05-15 | 全パネルへ適用ボタン追加 (app.js v28→v29) — ツールバーに global-size セレクト + ↕ 全パネルへ適用ボタン、misc 型は共通シードでプレビュー同期 |
+| 2026-05-15 | Sample6_1: ソート+二分探索 / 逐次探索 アニメーション追加 (algorithms.py) — ソート手法選択 UI (app.js v27→v28) |
 | 2026-05-13 | ハッシュ表: 文字列・実数キー対応 (app.js v26→v27) — キー型選択 UI + sum/poly/trunc/scale ハッシュ関数追加 |
 | 2026-05-13 | ハッシュ表 2本: ハッシュ関数選択 UI 追加 (app.js v25→v26) — 除算法/乗算法/二乗法/カスタム式ドロップダウン |
 | 2026-05-11 | drag/resize を Pointer Events API に統一 — `setPointerCapture` で軸ロック完全解消 (app.js v24→v25) |

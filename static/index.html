@@ -20,6 +20,12 @@
         <button id="btn-stop-all"   class="btn btn-danger">⏹ 全停止</button>
         <button id="btn-reset-all"  class="btn btn-secondary">↺ 全リセット</button>
         <button id="btn-sync-size"  class="btn btn-secondary" title="最前面のパネルサイズに全パネルを合わせる">⊞ サイズ統一</button>
+        <span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;border-left:1px solid #555;padding-left:10px">
+          <label style="font-size:0.85em;white-space:nowrap">データ数
+            <select id="global-size" style="margin-left:4px"></select>
+          </label>
+          <button id="btn-apply-global" class="btn btn-secondary" title="全非実行パネルのデータ数とシードを統一">↕ 全パネルへ適用</button>
+        </span>
         <div id="zoom-controls">
           <button id="btn-zoom-out"   class="btn btn-secondary" title="縮小">－</button>
           <span   id="zoom-label">100%</span>
@@ -42,6 +48,6 @@
   <!-- ===== スクリプト ===== -->
   <script src="/static/js/array_canvas.js?v=41"></script>
   <script src="/static/js/ws_client.js?v=1"></script>
-  <script src="/static/js/app.js?v=27"></script>
+  <script src="/static/js/app.js?v=30"></script>
 </body>
 </html>

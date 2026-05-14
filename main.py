@@ -50,17 +50,19 @@ class StartParams(BaseModel):
     seed:           Optional[int] = None        # 乱数シード (graph 等)
     init_data:      Optional[list[str]] = None  # ユーザー指定の初期データ (misc init_data 対応アルゴ用)
     ops:            Optional[list[str]] = None  # ユーザー指定の操作列 (misc ops 対応アルゴ用)
+    sort_method:    Optional[str] = None        # ソート手法: "quick" | "shell" | "insert"
 
 
 @app.get("/api/preview")
 def get_preview(algorithm_id: int, n: int = 16, seed: Optional[int] = None,
-                init_data: Optional[str] = None, ops: Optional[str] = None):
+                init_data: Optional[str] = None, ops: Optional[str] = None,
+                sort_method: Optional[str] = None):
     """ジェネレータの第1フレームだけ返す（実行前プレビュー用）"""
     if algorithm_id not in range(len(AlgorithmList)):
         return JSONResponse({"error": "invalid algorithm_id"}, status_code=400)
     algo_name, algo_fn, algo_meta = AlgorithmList[algorithm_id]
     try:
-        kw: dict = {"seed": seed}
+        kw: dict = {"seed": seed, "sort_method": sort_method}
         if init_data:
             import re as _re
             stripped = init_data.strip()
@@ -105,6 +107,8 @@ def start_session(params: StartParams):
             kw["init_data"] = params.init_data
         if params.ops:
             kw["ops"] = params.ops
+        if params.sort_method:
+            kw["sort_method"] = params.sort_method
         generator = algo_fn(params.num_items, **kw)
     elif algo_type == "sort":
         # sort: data_condition と data を渡す (target は不要)

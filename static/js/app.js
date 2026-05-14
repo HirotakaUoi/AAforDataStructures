@@ -69,6 +69,12 @@ function _algoSupportsHashFunc(algoId) {
   return !!(algo?.meta?.hash_func);
 }
 
+/** アルゴリズム ID がソート手法選択をサポートするか */
+function _algoSupportsSortMethod(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.sort_method);
+}
+
 /** キー型ごとのハッシュ関数オプション */
 const _KEY_TYPE_FUNCS = {
   int:   [
@@ -102,6 +108,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-stop-all") .addEventListener("click", stopAll);
   document.getElementById("btn-reset-all").addEventListener("click", resetAll);
   document.getElementById("btn-sync-size").addEventListener("click", syncSize);
+  document.getElementById("btn-apply-global").addEventListener("click", applyGlobalToAll);
   addPanel();
 });
 
@@ -112,6 +119,11 @@ async function loadMeta() {
   ]);
   algorithms = await alRes.json();
   dataSizes  = await dsRes.json();
+
+  // global-size セレクトを dataSizes で初期化
+  const gSel = document.getElementById("global-size");
+  dataSizes.forEach(s => gSel.appendChild(new Option(String(s), s)));
+  gSel.value = 16;
 }
 
 
@@ -232,6 +244,36 @@ function resetAll() {
   document.getElementById("btn-pause-all").textContent = "⏸ 全一時停止";
 }
 
+// ===== 全パネルへ適用 ===============================================
+// 全非実行パネルのデータ数を揃え、misc 型は共通シードでプレビューを同期する
+function applyGlobalToAll() {
+  const n          = Number(document.getElementById("global-size").value);
+  const sharedSeed = Math.floor(Math.random() * 1e9);
+
+  document.querySelectorAll(".panel").forEach(el => {
+    const panel = el._panel;
+    if (!panel || panel.isRunning) return;
+
+    // データ数を統一
+    const selSize = el.querySelector(".sel-size");
+    if (selSize) selSize.value = n;
+
+    const algoId = Number(el.querySelector(".sel-algo").value);
+    const type   = _algoType(algoId);
+
+    if (type === "misc") {
+      // misc: 共通シードでプレビューを同期
+      const canvas = el.querySelector(".array-canvas");
+      const ctx    = canvas.getContext("2d");
+      ctx.fillStyle = "#1a1a2e";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      panel._fetchAndDrawPreview(sharedSeed);
+    } else {
+      panel._drawPreview();
+    }
+  });
+}
+
 // ===================================================================
 // ArrayPanel クラス
 // ===================================================================
@@ -250,6 +292,7 @@ class ArrayPanel {
     this._speed            = 0.1;
     this._previewRequestId = 0;   // 非同期プレビューの競合防止カウンタ
     this._seed             = 0;   // グラフ等の乱数シード（プレビューと開始で共有）
+    this._sortMethod       = "quick"; // ソート手法（sort_method 対応アルゴのみ）
     this._initData         = null; // ユーザー指定の初期配列（init_data 対応アルゴのみ）
     this._ops              = null; // ユーザー指定の操作列（ops 対応アルゴのみ）
     this._hashFunc         = null; // ユーザー指定のハッシュ関数（hash_func 対応アルゴのみ）
@@ -330,13 +373,18 @@ class ArrayPanel {
       </div>
 
       <div class="params-row init-data-row" style="display:none">
-        <label class="lbl-init-data" style="flex:1;min-width:0">初期状態
+        <label class="lbl-init-data" style="white-space:nowrap;margin-right:6px">初期状態
           <input type="text" class="inp-init-data"
                  placeholder="例: 5 2 7 1  または  5,2,7,1"
-                 style="width:100%;max-width:260px;box-sizing:border-box">
+                 style="width:100%;max-width:200px;box-sizing:border-box">
         </label>
         <button class="btn btn-secondary btn-set-init-data" style="white-space:nowrap">設定</button>
-        <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1"></span>
+        <select class="sel-sort-method" style="display:none;flex:0 0 auto;max-width:160px;margin-left:8px">
+          <option value="quick">クイックソート</option>
+          <option value="shell">シェルソート</option>
+          <option value="insert">挿入ソート</option>
+        </select>
+        <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:6px"></span>
       </div>
 
       <div class="params-row ops-row" style="display:none">
@@ -431,18 +479,28 @@ class ArrayPanel {
     // lbl-size は常に表示 (misc でも num_items は参照される)
 
     // 初期状態行
+    const algo = algorithms.find(a => a.id === algoId);
     this.el.querySelector(".init-data-row").style.display = hasInitData ? "" : "none";
     if (!hasInitData) {
       this._initData = null;
       this.el.querySelector(".inp-init-data").value = "";
       this.el.querySelector(".init-data-info").textContent = "";
     } else {
-      // アルゴリズム固有のプレースホルダーをセット
-      const algo = algorithms.find(a => a.id === algoId);
+      // ラベルをアルゴリズム固有の名称に変更（なければ「初期状態」）
+      const lbl = this.el.querySelector(".lbl-init-data");
+      lbl.childNodes[0].textContent = (algo?.meta?.init_data_label || "初期状態") + "\n";
       const hint = algo?.meta?.init_data_hint || "";
       const isExpr = algo?.meta?.init_data_type === "expr";
       this.el.querySelector(".inp-init-data").placeholder =
         hint || (isExpr ? "式を入力" : "例: 5 2 7 1  または  5,2,7,1");
+    }
+
+    // ソート手法セレクト（init-data-row 内）
+    const hasSortMethod = _algoSupportsSortMethod(algoId);
+    this.el.querySelector(".sel-sort-method").style.display = hasSortMethod ? "" : "none";
+    if (!hasSortMethod) {
+      this._sortMethod = "quick";
+      this.el.querySelector(".sel-sort-method").value = "quick";
     }
 
     // 操作列行
@@ -453,7 +511,6 @@ class ArrayPanel {
       this.el.querySelector(".ops-info").textContent = "";
     } else {
       // アルゴリズム固有のプレースホルダーをセット
-      const algo = algorithms.find(a => a.id === algoId);
       const hint = algo?.meta?.ops_hint || "";
       const phLines = hint ? `例（1行1操作）:\n${hint}` : "例（1行1操作）:\nadd(5)\n...";
       this.el.querySelector(".inp-ops").placeholder = phLines;
@@ -511,6 +568,12 @@ class ArrayPanel {
       this._ops = null;
       q(".ops-info").style.color = "#aaa";
       q(".ops-info").textContent = "（デフォルト操作列を使用）";
+      if (!this.isRunning) this._drawPreview();
+    });
+
+    // ソート手法: 変更時にプレビュー更新
+    q(".sel-sort-method").addEventListener("change", () => {
+      this._sortMethod = q(".sel-sort-method").value;
       if (!this.isRunning) this._drawPreview();
     });
 
@@ -833,13 +896,14 @@ class ArrayPanel {
     );
   }
 
-  /** misc アルゴリズムの初期フレームをサーバーから取得してキャンバスに描画する */
-  async _fetchAndDrawPreview() {
+  /** misc アルゴリズムの初期フレームをサーバーから取得してキャンバスに描画する。
+   *  forcedSeed が指定された場合はそのシードを使う（全パネル一括適用用）。 */
+  async _fetchAndDrawPreview(forcedSeed = null) {
     const numItems  = Number(this.el.querySelector(".sel-size").value) || 16;
     const algoId    = Number(this.el.querySelector(".sel-algo").value);
     const requestId = ++this._previewRequestId;
 
-    this._seed = Math.floor(Math.random() * 1e9);
+    this._seed = (forcedSeed !== null) ? forcedSeed : Math.floor(Math.random() * 1e9);
     try {
       let previewUrl = `/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`;
       {
@@ -856,6 +920,9 @@ class ArrayPanel {
       }
       if (this._ops && this._ops.length > 0) {
         previewUrl += `&ops=${encodeURIComponent(this._ops.join("\n"))}`;
+      }
+      if (_algoSupportsSortMethod(algoId)) {
+        previewUrl += `&sort_method=${this._sortMethod}`;
       }
       const res = await fetch(previewUrl);
       if (!res.ok) return;
@@ -936,6 +1003,7 @@ class ArrayPanel {
         }
         if (initTokens.length > 0) body.init_data = initTokens;
         if (this._ops && this._ops.length > 0) body.ops = this._ops;
+        if (_algoSupportsSortMethod(algoId)) body.sort_method = this._sortMethod;
       }
 
       const res = await fetch("/api/start", {
