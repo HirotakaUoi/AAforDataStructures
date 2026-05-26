@@ -1133,15 +1133,19 @@ def rpn_eval(n, **kwargs):
         s_hl      = {len(oprs) - 1: "#ff8844"} if oprs else {}
         o_hl      = {i: "#ffff44" for i in range(len(output))}
         opr_color = "cyan" if opr != ' ' else "#888888"
-        # row レイアウト: スタック左 → opr変数 → B型式入力(中) → RPN出力(右)
+        # row レイアウト: [Opr/Oprs] 縦並び左 → [B型式/RPN] 縦並び右 (2×2 グリッド)
         row_obj = {"type": "row", "weight": 1, "children": [
-            _stack_v("oprs", list(oprs), len(oprs) - 1, _oprs_max,
-                     f"演算子スタック ({len(oprs)})", hl=s_hl, weight=1.2),
-            _c("opr_var", [opr if opr != ' ' else '空'], "opr (一時保存)",
-               hl={0: opr_color}, weight=0.5),
-            _c("expr",    expr,         f"B型式: {expr_str}", hl=e_hl, weight=1.5),
-            _c("out",     list(output), f"A型式(RPN) ({len(output)} トークン)",
-               hl=o_hl, weight=1.2),
+            {"type": "col", "weight": 1.2, "children": [
+                _c("opr_var", [opr if opr != ' ' else '空'], "Opr",
+                   hl={0: opr_color}, weight=1),
+                _stack_v("oprs", list(oprs), len(oprs) - 1, _oprs_max,
+                         "Oprs", hl=s_hl, weight=1),
+            ]},
+            {"type": "col", "weight": 1.5, "children": [
+                _c("expr", expr,         f"B型式: {expr_str}", hl=e_hl, weight=1),
+                _c("out",  list(output), f"A型式(RPN) ({len(output)} トークン)",
+                   hl=o_hl, weight=1),
+            ]},
         ]}
         return _f([row_obj], base + [{"message": msg, "color": color}])
 

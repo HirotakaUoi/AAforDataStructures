@@ -10,6 +10,7 @@
  *   fib_tree       – フィボナッチ再帰木
  *   staircase      – 階段状テキスト (階乗再帰)
  *   row            – 横並びコンテナ (children を weight 比で水平分割)
+ *   col            – row の子として使用: 縦並びサブコンテナ
  */
 
 "use strict";
@@ -122,6 +123,22 @@ class ArrayCanvas {
                 case "bst_tree":     this._drawBstTree(child, areaY, eachH, childX, childW);     break;
                 case "linked_list":  this._drawLinkedList(child, areaY, eachH, childX, childW);  break;
                 case "array1d_cells":this._drawArray1dCells(child, areaY, eachH, childX, childW);break;
+                case "col": {
+                  // row の中で縦に子を並べる
+                  const colChildren = child.children || [];
+                  const totalColW = colChildren.reduce((s, c) => s + (c.weight || 1), 0);
+                  let colY = areaY;
+                  for (const cc of colChildren) {
+                    const ccH = eachH * (cc.weight || 1) / totalColW;
+                    switch (cc.type) {
+                      case "array1d_cells": this._drawArray1dCells(cc, colY, ccH, childX, childW); break;
+                      case "linked_list":   this._drawLinkedList(cc, colY, ccH, childX, childW);   break;
+                      case "stack_v":       this._drawStackV(cc, colY, ccH, childX, childW);       break;
+                    }
+                    colY += ccH;
+                  }
+                  break;
+                }
                 default: break;
               }
               childX += childW;

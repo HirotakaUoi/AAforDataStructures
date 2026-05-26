@@ -251,7 +251,7 @@ AAforDataStructures/
 | ファイル | バージョン |
 |---|---|
 | `static/js/app.js` | **v32** |
-| `static/js/array_canvas.js` | **v43** |
+| `static/js/array_canvas.js` | **v44** |
 | `static/js/ws_client.js` | v1 |
 | `static/css/style.css` | **v6** |
 
@@ -261,6 +261,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-05-26 | RPN 変換・評価: 変換後 A型式(RPN)を B型式の下に配置 / Opr→"Opr"・演算子スタック→"Oprs" ラベル付き 2×2 グリッド表示 (array_canvas.js v43→v44, col 型対応追加) |
 | 2026-05-26 | RPN/B式パネルの初期状態入力欄を広げる: CSS class方式を廃止し、JS inline style直接設定方式に変更 (app.js v31→v32, style.css v5→v6) |
 | 2026-05-26 | RPN 変換・評価: 演算子スタック→stack_v表示 / 評価フェーズをrow+stack_v+エラー処理+result表示に変更 |
 | 2026-05-26 | RPN 評価・配列スタック: レイアウトを連結リスト版に合わせて左スタック・右式に変更 + 両RPN関数にエラー判定追加（空pop・最終要素数チェック） |
