@@ -250,10 +250,10 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v30** |
-| `static/js/array_canvas.js` | **v41** |
+| `static/js/app.js` | **v32** |
+| `static/js/array_canvas.js` | **v43** |
 | `static/js/ws_client.js` | v1 |
-| `static/css/style.css` | v4 |
+| `static/css/style.css` | **v6** |
 
 ---
 
@@ -261,6 +261,10 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-05-26 | RPN/B式パネルの初期状態入力欄を広げる: CSS class方式を廃止し、JS inline style直接設定方式に変更 (app.js v31→v32, style.css v5→v6) |
+| 2026-05-26 | RPN 変換・評価: 演算子スタック→stack_v表示 / 評価フェーズをrow+stack_v+エラー処理+result表示に変更 |
+| 2026-05-26 | RPN 評価・配列スタック: レイアウトを連結リスト版に合わせて左スタック・右式に変更 + 両RPN関数にエラー判定追加（空pop・最終要素数チェック） |
+| 2026-05-26 | RPN 評価・連結リストスタック: スタック表示を横→縦(底が下)に変更、入力文字列の左に配置 (array_canvas.js v41→v42) |
 | 2026-05-15 | クイックソート分割を Hoare ライク二方向走査に変更 / データ数上限64→撤廃 / 探索回数ラベル・UI整理 (app.js v29→v30) |
 | 2026-05-15 | 全パネルへ適用ボタン追加 (app.js v28→v29) — ツールバーに global-size セレクト + ↕ 全パネルへ適用ボタン、misc 型は共通シードでプレビュー同期 |
 | 2026-05-15 | Sample6_1: ソート+二分探索 / 逐次探索 アニメーション追加 (algorithms.py) — ソート手法選択 UI (app.js v27→v28) |

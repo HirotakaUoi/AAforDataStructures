@@ -224,6 +224,10 @@ header h1 {
 }
 .params-row select:focus { outline: 1px solid #e94560; }
 
+/* 式入力 (RPN/B式) 用: 行の折り返しを抑止（残りは JS で inline style を直接設定） */
+.params-row.expr-wide { flex-wrap: nowrap; }
+.params-row.expr-wide .init-data-info { flex: 0 0 auto; }
+
 /* スピードスライダー */
 .speed-group {
   display: flex;

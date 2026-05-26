@@ -491,8 +491,19 @@ class ArrayPanel {
       lbl.childNodes[0].textContent = (algo?.meta?.init_data_label || "初期状態") + "\n";
       const hint = algo?.meta?.init_data_hint || "";
       const isExpr = algo?.meta?.init_data_type === "expr";
-      this.el.querySelector(".inp-init-data").placeholder =
-        hint || (isExpr ? "式を入力" : "例: 5 2 7 1  または  5,2,7,1");
+      const inp = this.el.querySelector(".inp-init-data");
+      const row = this.el.querySelector(".init-data-row");
+      inp.placeholder = hint || (isExpr ? "式を入力" : "例: 5 2 7 1  または  5,2,7,1");
+      // 式入力(RPN/B式)は入力欄を広げる — inline style を直接書いて確実に反映
+      if (isExpr) {
+        row.classList.add("expr-wide");
+        lbl.style.cssText = "display:flex;align-items:center;gap:4px;flex:1 1 0;min-width:0;white-space:nowrap;";
+        inp.style.cssText = "flex:1 1 0;min-width:0;max-width:none;box-sizing:border-box;";
+      } else {
+        row.classList.remove("expr-wide");
+        lbl.style.cssText = "white-space:nowrap;margin-right:6px;";
+        inp.style.cssText = "width:100%;max-width:200px;box-sizing:border-box;";
+      }
     }
 
     // ソート手法セレクト（init-data-row 内）

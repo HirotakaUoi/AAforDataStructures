@@ -81,7 +81,7 @@ class ArrayCanvas {
   // ── メイン描画 ────────────────────────────────────────────────────
   draw(frame) {
     const { objects = [], texts = [], finished = false, found = null,
-            text_position = "top" } = frame;
+            text_position = "top", result = null } = frame;
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.cw, this.ch);
 
@@ -118,8 +118,10 @@ class ArrayCanvas {
             for (const child of children) {
               const childW = this.cw * (child.weight || 1) / totalCW;
               switch (child.type) {
-                case "stack_v":   this._drawStackV(child, areaY, eachH, childX, childW);  break;
-                case "bst_tree":  this._drawBstTree(child, areaY, eachH, childX, childW); break;
+                case "stack_v":      this._drawStackV(child, areaY, eachH, childX, childW);      break;
+                case "bst_tree":     this._drawBstTree(child, areaY, eachH, childX, childW);     break;
+                case "linked_list":  this._drawLinkedList(child, areaY, eachH, childX, childW);  break;
+                case "array1d_cells":this._drawArray1dCells(child, areaY, eachH, childX, childW);break;
                 default: break;
               }
               childX += childW;
@@ -169,7 +171,25 @@ class ArrayCanvas {
       ctx.fillStyle = "rgba(0,0,0,.55)";
       ctx.fillRect(0, 0, this.cw, this.ch);
       const fs = Math.min(36, this.cw / 8);
-      if (found === true) {
+      if (result !== null) {
+        // result フィールドがある場合: 計算結果またはエラーを表示
+        const isError = typeof result === "string" && result.startsWith("エラー");
+        const bgColor  = isError ? "rgba(90,0,0,.80)"  : "rgba(0,70,0,.80)";
+        const txtColor = isError ? "#ff9999"            : "#88ffbb";
+        ctx.fillStyle = bgColor;
+        const boxH = fs * 2.6;
+        ctx.fillRect(0, this.ch / 2 - boxH / 2, this.cw, boxH);
+        // テキストサイズをキャンバス幅に合わせて自動縮小
+        let rfs = Math.min(fs * 1.1, this.cw / 10);
+        ctx.font = `bold ${rfs}px monospace`;
+        while (ctx.measureText(String(result)).width > this.cw - 16 && rfs > 10) {
+          rfs -= 1;
+          ctx.font = `bold ${rfs}px monospace`;
+        }
+        ctx.fillStyle = txtColor;
+        ctx.textAlign = "center";
+        ctx.fillText(String(result), this.cw / 2, this.ch / 2 + rfs * 0.38);
+      } else if (found === true) {
         ctx.fillStyle = "rgba(0,80,0,.75)";
         ctx.fillRect(0, this.ch / 2 - fs * 1.2, this.cw, fs * 2.4);
         ctx.fillStyle = "#44ff88";
@@ -317,7 +337,7 @@ class ArrayCanvas {
   // ════════════════════════════════════════════════════════════════════
   // array1d_cells – 正方形セル配列
   // ════════════════════════════════════════════════════════════════════
-  _drawArray1dCells(obj, areaY, areaH) {
+  _drawArray1dCells(obj, areaY, areaH, areaX = 0, areaW = null) {
     const {
       values = [], label = "",
       highlights = {}, fills = [],
@@ -329,7 +349,7 @@ class ArrayCanvas {
     if (n === 0) return;
 
     const ctx = this.ctx;
-    const cw  = this.cw;
+    const cw  = (areaW !== null) ? areaW : this.cw;
 
     const hasSize = (unused_from !== null);
     const PAD_T = 22; const PAD_B = hasSize ? 64 : 16;
@@ -355,6 +375,7 @@ class ArrayCanvas {
     const cellY  = chartT + (chartH - cellH) / 2;
 
     ctx.save();
+    if (areaX) ctx.translate(areaX, 0);
 
     if (label) {
       ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
@@ -1231,8 +1252,8 @@ class ArrayCanvas {
   // ════════════════════════════════════════════════════════════════════
   // linked_list – 連結リスト（ノード＋矢印）
   // ════════════════════════════════════════════════════════════════════
-  _drawLinkedList(obj, areaY, areaH) {
-    if (obj.is_vertical) { this._drawLinkedListV(obj, areaY, areaH); return; }
+  _drawLinkedList(obj, areaY, areaH, areaX = 0, areaW = null) {
+    if (obj.is_vertical) { this._drawLinkedListV(obj, areaY, areaH, areaX, areaW); return; }
     const {
       nodes      = [],
       label      = "",
@@ -1409,7 +1430,7 @@ class ArrayCanvas {
   // linked_list (vertical) – 縦方向連結リスト（BOTTOM 固定・上積み）
   // nodes[0] = top（上）、nodes[n-1] = bottom（下・固定）
   // ════════════════════════════════════════════════════════════════════
-  _drawLinkedListV(obj, areaY, areaH) {
+  _drawLinkedListV(obj, areaY, areaH, areaX = 0, areaW = null) {
     const {
       nodes      = [],
       label      = "",
@@ -1420,7 +1441,7 @@ class ArrayCanvas {
     } = obj;
     const n   = nodes.length;
     const ctx = this.ctx;
-    const cw  = this.cw;
+    const cw  = (areaW !== null) ? areaW : this.cw;
     const CORNER  = 5;
 
     // ── レイアウト定数 ──────────────────────────────────────────────
@@ -1446,6 +1467,7 @@ class ArrayCanvas {
     const ARROW_H = Math.max(10, Math.min(18, (availForNodes - maxNodes * NODE_H - NULL_H) / Math.max(arrowSlots, 1)));
 
     ctx.save();
+    if (areaX) ctx.translate(areaX, 0);
 
     if (label) {
       ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";

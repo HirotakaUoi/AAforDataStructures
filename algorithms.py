@@ -14,9 +14,9 @@ from random import randint
 # 共通ヘルパー
 # ---------------------------------------------------------------------------
 
-def _f(objects, texts=None, finished=False, found=None, text_position="top"):
+def _f(objects, texts=None, finished=False, found=None, text_position="top", result=None):
     return {"objects": objects, "texts": texts or [], "finished": finished,
-            "found": found, "text_position": text_position}
+            "found": found, "text_position": text_position, "result": result}
 
 def _c(id, values, label="", hl=None, fills=None, ptr=None,
        watchman=None, target=None, weight=1, unused_from=None):
@@ -1124,20 +1124,26 @@ def rpn_eval(n, **kwargs):
     output = []   # RPN 出力トークン
     opr    = ' '  # 直前の演算子を一時保存 (Sample5_6: char opr = ' ')
 
+    # 変換フェーズの演算子スタック最大深さを事前推定
+    _oprs_max = max(3, sum(1 for c in expr if c == '(') + 1)
+
     def cvt_frame(ci, msg, color="lightgreen"):
         e_hl = {j: "#4466aa" for j in range(ci)}   # 処理済み: 薄青
         e_hl[ci] = "#bb66ff"                        # 現在位置: 紫
         s_hl      = {len(oprs) - 1: "#ff8844"} if oprs else {}
         o_hl      = {i: "#ffff44" for i in range(len(output))}
         opr_color = "cyan" if opr != ' ' else "#888888"
-        return _f([
-            _c("expr",    expr,       f"B型式: {expr_str}", hl=e_hl, weight=0.7),
+        # row レイアウト: スタック左 → opr変数 → B型式入力(中) → RPN出力(右)
+        row_obj = {"type": "row", "weight": 1, "children": [
+            _stack_v("oprs", list(oprs), len(oprs) - 1, _oprs_max,
+                     f"演算子スタック ({len(oprs)})", hl=s_hl, weight=1.2),
             _c("opr_var", [opr if opr != ' ' else '空'], "opr (一時保存)",
                hl={0: opr_color}, weight=0.5),
-            _c("oprs",    list(oprs), f"演算子スタック ({len(oprs)})", hl=s_hl,
-               ptr=_ptr(len(oprs) - 1, "top", "#ff8844") if oprs else None),
-            _c("out",     list(output), f"A型式(RPN) 出力 ({len(output)} トークン)", hl=o_hl),
-        ], base + [{"message": msg, "color": color}])
+            _c("expr",    expr,         f"B型式: {expr_str}", hl=e_hl, weight=1.5),
+            _c("out",     list(output), f"A型式(RPN) ({len(output)} トークン)",
+               hl=o_hl, weight=1.2),
+        ]}
+        return _f([row_obj], base + [{"message": msg, "color": color}])
 
     yield cvt_frame(0, "変換開始  (Sample5_6)")
 
@@ -1179,22 +1185,30 @@ def rpn_eval(n, **kwargs):
     # ── A型式(RPN) 評価フェーズ  ≡ Sample5_2.cpp ──
     base2 = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_2)", "color": "white"}]
     nums  = []
+    # 評価フェーズの数値スタック最大深さを事前推定（数字トークン数 + 余白）
+    _nums_max = max(3, sum(1 for tok in output if tok.isdigit()) + 1)
 
-    def eval_frame(ti, msg, color="lightgreen", finished=False):
-        r_hl   = {j: "#336699" for j in range(ti)}
-        if ti < len(output): r_hl[ti] = "#ff8844"
-        n_disp = [str(x) for x in nums]
-        n_hl   = {len(nums) - 1: "#44cc66"} if nums else {}
-        return _f([
-            _c("rpn",  list(output), f"A型式(RPN): {rpn_str}", hl=r_hl, weight=0.7),
-            _c("nums", n_disp, f"数値スタック ({len(nums)})", hl=n_hl,
-               ptr=_ptr(len(nums) - 1, "top", "#44cc66") if nums else None),
-        ], base2 + [{"message": msg, "color": color}], finished=finished)
+    def eval_frame(ti, msg, color="lightgreen", finished=False, error=False, result=None):
+        r_hl = {j: "#336699" for j in range(ti)}
+        if ti < len(output): r_hl[ti] = "#ff4444" if error else "#ff8844"
+        n_hl = {len(nums) - 1: "#ff4444" if error else "#44cc66"} if nums else {}
+        stack_obj = _stack_v("nums", [str(x) for x in nums], len(nums) - 1, _nums_max,
+                             f"数値スタック  ({len(nums)})", hl=n_hl, weight=1)
+        rpn_obj   = _c("rpn", list(output), f"A型式(RPN): {rpn_str}", hl=r_hl, weight=2)
+        row_obj   = {"type": "row", "weight": 1, "children": [stack_obj, rpn_obj]}
+        return _f([row_obj], base2 + [{"message": msg, "color": color}],
+                  finished=finished, result=result)
 
     yield eval_frame(0, "RPN 評価開始  (Sample5_2)")
 
     for ti, tok in enumerate(output):
         if tok in '+-*/':
+            if len(nums) < 2:
+                yield eval_frame(ti,
+                                 f"エラー: スタックが空 (要素数={len(nums)}) なのに演算子 '{tok}' で Pop しようとしました",
+                                 color="#ff4444", finished=True, error=True,
+                                 result=f"エラー: '{tok}' — スタックが空")
+                return
             b = nums.pop()
             a = nums.pop()
             res = (a + b if tok == '+' else a - b if tok == '-'
@@ -1206,10 +1220,15 @@ def rpn_eval(n, **kwargs):
             nums.append(int(tok))
             yield eval_frame(ti, f"数字 '{tok}' → Push {tok}", color="lightgreen")
 
-    result = nums[0] if nums else '?'
-    yield _f([_c("result", [str(result)], f"結果 = {result}", hl={0: "#44cc66"})],
-             base2 + [{"message": f"評価完了!  {expr_str} = {result}", "color": "#44aa44"}],
-             finished=True)
+    if len(nums) != 1:
+        yield eval_frame(len(output) - 1,
+                         f"エラー: 評価終了後のスタックが {len(nums)} 要素 (正常は1要素のみ)",
+                         color="#ff4444", finished=True, error=True,
+                         result=f"エラー: {len(nums)} 要素残存 (正常は1)")
+        return
+    yield eval_frame(len(output) - 1,
+                     f"評価完了!  {expr_str} = {nums[0]}", color="#44aa44",
+                     finished=True, result=f"= {nums[0]}")
 
 
 def rpn_eval_array(n, **kwargs):
@@ -1229,24 +1248,31 @@ def rpn_eval_array(n, **kwargs):
     base    = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_2・配列スタック)", "color": "white"}]
     nums    = []   # 配列スタック (Python list として模倣)
 
-    def frame(ci, msg, color="lightgreen", finished=False):
+    def frame(ci, msg, color="lightgreen", finished=False, error=False, result=None):
         e_hl  = {j: "#336699" for j in range(ci)}
         if 0 <= ci < len(tokens):
-            e_hl[ci] = "#ff8844"
+            e_hl[ci] = "#ff4444" if error else "#ff8844"
         top   = len(nums) - 1
         s_vals = [str(x) for x in nums]
         s_size = max(1, len(nums))
-        s_hl  = {top: "#44cc66"} if nums else {}
-        return _f([
-            _c("rpn",  tokens, f"A型式: {rpn_str}", hl=e_hl, weight=0.7),
-            _stack_v("nums", s_vals, top, s_size,
-                     f"数値スタック (配列)  top={top}", hl=s_hl),
-        ], base + [{"message": msg, "color": color}], finished=finished)
+        s_hl  = {top: "#ff4444" if error else "#44cc66"} if nums else {}
+        stack_obj = _stack_v("nums", s_vals, top, s_size,
+                             f"数値スタック (配列)  top={top}", hl=s_hl, weight=1)
+        expr_obj  = _c("rpn", tokens, f"A型式: {rpn_str}", hl=e_hl, weight=2)
+        row_obj   = {"type": "row", "weight": 1, "children": [stack_obj, expr_obj]}
+        return _f([row_obj], base + [{"message": msg, "color": color}],
+                  finished=finished, result=result)
 
     yield frame(0, "RPN 評価開始  (Sample5_2: 配列スタック)")
 
     for ci, tok in enumerate(tokens):
         if tok in '+-*/':
+            if len(nums) < 2:
+                yield frame(ci,
+                            f"エラー: スタックが空 (要素数={len(nums)}) なのに演算子 '{tok}' で Pop しようとしました",
+                            color="#ff4444", finished=True, error=True,
+                            result=f"エラー: '{tok}' — スタックが空")
+                return
             b = nums.pop(); a = nums.pop()
             res = (a + b if tok == '+' else a - b if tok == '-'
                    else a * b if tok == '*' else a // b)
@@ -1257,9 +1283,15 @@ def rpn_eval_array(n, **kwargs):
             nums.append(int(tok))
             yield frame(ci, f"数字 '{tok}' → Push {tok}")
 
-    result = nums[0] if nums else '?'
+    if len(nums) != 1:
+        yield frame(len(tokens) - 1,
+                    f"エラー: 評価終了後のスタックが {len(nums)} 要素 (正常は1要素のみ)",
+                    color="#ff4444", finished=True, error=True,
+                    result=f"エラー: {len(nums)} 要素残存 (正常は1)")
+        return
     yield frame(len(tokens) - 1,
-                f"評価完了!  {rpn_str} = {result}", color="#44aa44", finished=True)
+                f"評価完了!  {rpn_str} = {nums[0]}", color="#44aa44",
+                finished=True, result=f"= {nums[0]}")
 
 
 def rpn_eval_list(n, **kwargs):
@@ -1279,23 +1311,34 @@ def rpn_eval_list(n, **kwargs):
     base    = [{"message": f"A型式(RPN) 評価: {rpn_str}  (Sample5_5・連結リストスタック)", "color": "white"}]
     nums    = []   # 連結リストスタック (top が先頭)
 
-    def frame(ci, msg, color="lightgreen", finished=False):
+    def frame(ci, msg, color="lightgreen", finished=False, error=False, result=None):
         e_hl = {j: "#336699" for j in range(ci)}
         if 0 <= ci < len(tokens):
-            e_hl[ci] = "#ff8844"
-        ll_hl = {0: "#44cc66"} if nums else {}   # top (先頭) をハイライト
-        objs = [_c("rpn", tokens, f"A型式: {rpn_str}", hl=e_hl, weight=0.7)]
-        if nums:
-            objs.append(_ll("stack", list(nums), "数値スタック (連結リスト)  top → ",
-                            hl=ll_hl, ptr_labels=["top"], ptr_colors=["#44cc66"]))
-        else:
-            objs.append(_ll("stack", [], "数値スタック (連結リスト)  空"))
-        return _f(objs, base + [{"message": msg, "color": color}], finished=finished)
+            e_hl[ci] = "#ff4444" if error else "#ff8844"
+        ll_hl = {0: "#ff4444" if error else "#44cc66"} if nums else {}
+        top_color   = "#ff4444" if error else "#44cc66"
+        stack_obj = _ll("stack", list(nums),
+                        "スタック  top↑" if nums else "スタック (空)",
+                        hl=ll_hl, is_vertical=True,
+                        ptr_labels=["top", "bottom"],
+                        ptr_colors=[top_color, "#4499dd"],
+                        weight=1)
+        expr_obj  = _c("rpn", tokens, f"A型式: {rpn_str}", hl=e_hl, weight=2)
+        row_obj   = {"type": "row", "weight": 1,
+                     "children": [stack_obj, expr_obj]}
+        return _f([row_obj], base + [{"message": msg, "color": color}],
+                  finished=finished, result=result)
 
     yield frame(0, "RPN 評価開始  (Sample5_5: 連結リストスタック)")
 
     for ci, tok in enumerate(tokens):
         if tok in '+-*/':
+            if len(nums) < 2:
+                yield frame(ci,
+                            f"エラー: スタックが空 (要素数={len(nums)}) なのに演算子 '{tok}' で Pop しようとしました",
+                            color="#ff4444", finished=True, error=True,
+                            result=f"エラー: '{tok}' — スタックが空")
+                return
             b = nums.pop(0); a = nums.pop(0)
             res = (a + b if tok == '+' else a - b if tok == '-'
                    else a * b if tok == '*' else a // b)
@@ -1306,9 +1349,15 @@ def rpn_eval_list(n, **kwargs):
             nums.insert(0, int(tok))   # 先頭に追加 (push)
             yield frame(ci, f"数字 '{tok}' → Push {tok}")
 
-    result = nums[0] if nums else '?'
+    if len(nums) != 1:
+        yield frame(len(tokens) - 1,
+                    f"エラー: 評価終了後のスタックが {len(nums)} 要素 (正常は1要素のみ)",
+                    color="#ff4444", finished=True, error=True,
+                    result=f"エラー: {len(nums)} 要素残存 (正常は1)")
+        return
     yield frame(len(tokens) - 1,
-                f"評価完了!  {rpn_str} = {result}", color="#44aa44", finished=True)
+                f"評価完了!  {rpn_str} = {nums[0]}", color="#44aa44",
+                finished=True, result=f"= {nums[0]}")
 
 
 def rpn_direct_b(n, **kwargs):
@@ -1331,6 +1380,11 @@ def rpn_direct_b(n, **kwargs):
     nums   = [0]  # int スタック, 初期値 0 を Push
     opr    = '+'  # 現在保持している演算子 (初期値 '+')
 
+    # スタック最大深さを事前推定
+    _depth = max(2, sum(1 for c in expr if c == '('))
+    _oprs_max = _depth
+    _nums_max = _depth + 1   # nums は oprs + 1 (初期 0 があるため)
+
     def do_op(op):
         val2 = nums.pop(); val1 = nums.pop()
         res  = (val1 + val2 if op == '+' else val1 - val2 if op == '-'
@@ -1347,18 +1401,19 @@ def rpn_direct_b(n, **kwargs):
         o_hl   = {o_top: "#ff8844"} if oprs else {}
         n_hl   = {n_top: "#44cc66"} if nums  else {}
         opr_color = "cyan" if opr != ' ' else "#888888"
-        # 実データのみ渡す (空スロットなし)
         o_vals = list(oprs)
         n_vals = [str(x) for x in nums]
-        return _f([
-            _c("expr", expr, f"B型式: {expr_str}", hl=e_hl, weight=0.6),
+        # row レイアウト: 演算子スタック | 数値スタック | opr変数 | B型式入力(右)
+        row_obj = {"type": "row", "weight": 1, "children": [
+            _stack_v("oprs", o_vals, o_top, _oprs_max,
+                     f"演算子スタック  top={o_top}", hl=o_hl, weight=1.0),
+            _stack_v("nums", n_vals, n_top, _nums_max,
+                     f"数値スタック  top={n_top}",  hl=n_hl, weight=1.0),
             _c("opr_var", [opr if opr != ' ' else '空'], "opr (一時保存演算子)",
                hl={0: opr_color}, weight=0.5),
-            _stack_v("oprs", o_vals, o_top, max(1, len(oprs)),
-                     f"演算子スタック  top={o_top}", hl=o_hl, weight=1.0),
-            _stack_v("nums", n_vals, n_top, max(1, len(nums)),
-                     f"数値スタック  top={n_top}", hl=n_hl, weight=1.0),
-        ], base + [{"message": msg, "color": color}], finished=finished)
+            _c("expr", expr, f"B型式: {expr_str}", hl=e_hl, weight=1.5),
+        ]}
+        return _f([row_obj], base + [{"message": msg, "color": color}], finished=finished)
 
     yield frame(0, "初期状態: opr='+', numbers=[0]  (= '0+式' として処理開始)")
 
@@ -3211,7 +3266,7 @@ AlgorithmList = [
     ("RPN 評価・連結リストスタック  (Ch.5)", rpn_eval_list,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
       "init_data_hint": "例: 2 3 + 8 1 - *"}),
-    ("RPN 変換・評価  (Ch.5)",      rpn_eval,
+    ("B式->RPN 変換・評価  (Ch.5)", rpn_eval,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
       "init_data_hint": "例: (2+3)*(8-1)"}),
     ("B型式 直接計算  (Ch.5)",      rpn_direct_b,
