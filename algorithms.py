@@ -3246,6 +3246,214 @@ def sample6_1_sequential(n, **kwargs):
                 color="cyan", finished=True)
 
 
+# ---------------------------------------------------------------------------
+# Ch.12: ゲーム木 / α-β 枝刈り
+# ---------------------------------------------------------------------------
+
+def _gt_node(id_, player, children=None, leaf_val=None):
+    """ゲーム木ノード辞書を生成する"""
+    return {
+        "id": id_,
+        "player": player,       # "MAX" | "MIN" | "LEAF"
+        "value": leaf_val,      # 葉は初期値、内部ノードは None から始まる
+        "hl": None,             # None | "active" | "pruned" | "done" | "best"
+        "alpha": None,          # α-β 用
+        "beta": None,
+        "pruned_here": False,
+        "children": children or [],
+    }
+
+
+def _gt_deep(node):
+    """ゲーム木ノードのディープコピー"""
+    n = dict(node)
+    n["children"] = [_gt_deep(c) for c in node["children"]]
+    return n
+
+
+def _gt_find(root, id_):
+    """IDでノードを検索する"""
+    if root["id"] == id_:
+        return root
+    for child in root["children"]:
+        found = _gt_find(child, id_)
+        if found:
+            return found
+    return None
+
+
+def _gt_frame(root, label="", texts=None, finished=False):
+    """ゲーム木フレームを生成する"""
+    return _f(
+        [{"type": "game_tree", "root": _gt_deep(root), "label": label, "weight": 1}],
+        texts or [],
+        finished=finished,
+    )
+
+
+def _build_game_tree():
+    """3レベルのゲーム木を構築する (Root=MAX, 子3×MIN, 孫3×LEAF)"""
+    leaf_data = [("A", [3, 12, 8]), ("B", [1, 4, 6]), ("C", [2, 5, 4])]
+    min_children = []
+    for name, vals in leaf_data:
+        leaves = [_gt_node(f"{name}{i}", "LEAF", leaf_val=v) for i, v in enumerate(vals)]
+        min_children.append(_gt_node(name, "MIN", children=leaves))
+    return _gt_node("root", "MAX", children=min_children)
+
+
+def minimax_game_tree(n, **kwargs):
+    """ミニマックス法のアニメーション (Ch.12)"""
+    root = _build_game_tree()
+    root["value"] = None
+    for mn in root["children"]:
+        mn["value"] = None
+
+    label = "ミニマックス法"
+
+    # 初期フレーム: 葉の値を表示
+    yield _gt_frame(root, label,
+                    [{"message": "ゲーム木: MAX が最大化, MIN が最小化。葉の評価値を確認。",
+                      "color": "white"}])
+
+    # 各 MIN ノードを順番に評価
+    for mn in root["children"]:
+        mn["hl"] = "active"
+        yield _gt_frame(root, label,
+                        [{"message": f"MIN ノード {mn['id']} の子葉を評価...", "color": "yellow"}])
+
+        best = None
+        for leaf in mn["children"]:
+            leaf["hl"] = "active"
+            yield _gt_frame(root, label,
+                            [{"message": f"葉 {leaf['id']} = {leaf['value']}", "color": "yellow"}])
+
+            if best is None or leaf["value"] < best:
+                best = leaf["value"]
+            leaf["hl"] = "done"
+            mn["value"] = best  # 暫定最小値を表示
+            yield _gt_frame(root, label,
+                            [{"message": f"MIN({mn['id']}) 暫定値 = {best}", "color": "cyan"}])
+
+        mn["value"] = best
+        mn["hl"] = "done"
+        yield _gt_frame(root, label,
+                        [{"message": f"MIN({mn['id']}) = {best}  確定", "color": "lightgreen"}])
+
+    # ROOT (MAX) の評価
+    root["hl"] = "active"
+    yield _gt_frame(root, label,
+                    [{"message": "ROOT (MAX): 子の最大値を選択...", "color": "yellow"}])
+
+    best_child = max(root["children"], key=lambda c: c["value"])
+    root["value"] = best_child["value"]
+    root["hl"] = "done"
+
+    # ベストパスをハイライト
+    best_child["hl"] = "best"
+    best_leaf = min(best_child["children"], key=lambda c: c["value"])
+    best_leaf["hl"] = "best"
+
+    yield _gt_frame(root, label,
+                    [{"message": f"ミニマックス値 = {root['value']}  (最善手: {best_child['id']})", "color": "lightgreen"}],
+                    finished=True)
+
+
+def alpha_beta_pruning(n, **kwargs):
+    """α-β 枝刈りアルゴリズムのアニメーション (Ch.12)"""
+    root = _build_game_tree()
+    root["value"] = None
+    for mn in root["children"]:
+        mn["value"] = None
+
+    label = "α-β 枝刈り"
+    INF = 999  # +∞ の代用
+
+    def astr(v):
+        return "-∞" if v == -INF else ("+∞" if v == INF else str(v))
+
+    # 初期フレーム
+    root["alpha"] = -INF
+    root["beta"]  = INF
+    yield _gt_frame(root, label,
+                    [{"message": f"α-β 枝刈り: α=-∞, β=+∞ で開始", "color": "white"}])
+
+    alpha = -INF   # ROOT が保持する α (MAX が確保した下限)
+    best_val = -INF
+    best_child_id = None
+
+    root["hl"] = "active"
+    yield _gt_frame(root, label,
+                    [{"message": f"ROOT (MAX): α={astr(alpha)}", "color": "yellow"}])
+
+    for mn in root["children"]:
+        mn["hl"] = "active"
+        mn["alpha"] = alpha
+        mn["beta"]  = INF
+        yield _gt_frame(root, label,
+                        [{"message": f"MIN ノード {mn['id']}: α={astr(alpha)}, β=+∞", "color": "yellow"}])
+
+        min_val = INF   # MIN が保持する暫定最小値 (=β)
+        pruned = False
+
+        for i, leaf in enumerate(mn["children"]):
+            leaf["hl"] = "active"
+            yield _gt_frame(root, label,
+                            [{"message": f"葉 {leaf['id']} = {leaf['value']}", "color": "yellow"}])
+
+            leaf["hl"] = "done"
+            if leaf["value"] < min_val:
+                min_val = leaf["value"]
+            mn["value"] = min_val
+            mn["beta"]  = min_val
+
+            # α カット: β ≤ α → MIN ノードの値が ROOT の α 以下 → 残りの子を枝刈り
+            if min_val <= alpha:
+                for j in range(i + 1, len(mn["children"])):
+                    mn["children"][j]["hl"] = "pruned"
+                    mn["children"][j]["pruned_here"] = True
+                pruned = True
+                yield _gt_frame(root, label,
+                                [{"message": f"α カット: β={astr(min_val)} ≤ α={astr(alpha)}  →  {mn['id']} の残り子を枝刈り!",
+                                  "color": "#ff6644"}])
+                break
+
+            yield _gt_frame(root, label,
+                            [{"message": f"MIN({mn['id']}) 暫定値 = {min_val}  (β={astr(min_val)} > α={astr(alpha)}, 続行)",
+                              "color": "cyan"}])
+
+        mn["value"] = min_val
+        mn["hl"] = "done"
+        if not pruned:
+            yield _gt_frame(root, label,
+                            [{"message": f"MIN({mn['id']}) = {min_val}  確定", "color": "lightgreen"}])
+
+        # ROOT の α 更新
+        if min_val > best_val:
+            best_val = min_val
+            best_child_id = mn["id"]
+        if best_val > alpha:
+            alpha = best_val
+            root["alpha"] = alpha
+            yield _gt_frame(root, label,
+                            [{"message": f"ROOT α 更新: α = {astr(alpha)}", "color": "lightgreen"}])
+
+    root["value"] = best_val if best_val != -INF else None
+    root["hl"] = "done"
+
+    # ベストパスをハイライト
+    bc = _gt_find(root, best_child_id)
+    if bc:
+        bc["hl"] = "best"
+        non_pruned = [c for c in bc["children"] if not c.get("pruned_here")]
+        if non_pruned:
+            best_leaf = min(non_pruned, key=lambda c: c["value"] if c["value"] is not None else INF)
+            best_leaf["hl"] = "best"
+
+    yield _gt_frame(root, label,
+                    [{"message": f"α-β 枝刈り完了: 最終値 = {root['value']}  (枝刈りで探索を削減)", "color": "lightgreen"}],
+                    finished=True)
+
+
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
     ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
@@ -3298,6 +3506,9 @@ AlgorithmList = [
     # ── Ch.11: グラフ ──
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),
     ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc"}),
+    # ── Ch.12: ゲーム木 ──
+    ("ミニマックス法  (Ch.12)",      minimax_game_tree,  {"type": "misc"}),
+    ("α-β 枝刈り  (Ch.12)",         alpha_beta_pruning, {"type": "misc"}),
     # ── Ch.10: ハッシュ表 ──
     ("ハッシュ表 オープンアドレス法  (Ch.10)", hash_open_addressing,
      {"type": "misc", "init_data": True, "init_data_type": "expr",

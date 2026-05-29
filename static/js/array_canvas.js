@@ -11,6 +11,7 @@
  *   staircase      – 階段状テキスト (階乗再帰)
  *   row            – 横並びコンテナ (children を weight 比で水平分割)
  *   col            – row の子として使用: 縦並びサブコンテナ
+ *   game_tree      – ゲーム木 (MAX/MIN 交互, α-β 枝刈り対応)
  */
 
 "use strict";
@@ -149,6 +150,7 @@ class ArrayCanvas {
           case "hash_table":  this._drawHashTable(obj, areaY, eachH);  break;
           case "btree_view":  this._drawBtreeView(obj, areaY, eachH);  break;
           case "op_list":     this._drawOpList(obj, areaY, eachH);     break;
+          case "game_tree":   this._drawGameTree(obj, areaY, eachH);   break;
         }
         areaY += eachH;
       }
@@ -2711,6 +2713,207 @@ class ArrayCanvas {
       ctx.textBaseline = "middle";
       ctx.fillText(`… (${startIdx} 件省略)`, padX, listY - 8);
     }
+
+    ctx.restore();
+  }
+
+  // ── ゲーム木 (minimax / α-β 枝刈り) ─────────────────────────────────────
+  _drawGameTree(obj, areaY, areaH, areaX = 0, areaW = null) {
+    const { root = null, label = "" } = obj;
+    if (!root) return;
+
+    const ctx = this.ctx;
+    const th  = _acTheme();
+    const cw  = (areaW !== null) ? areaW : this.cw;
+    const ox  = areaX;
+
+    const PAD    = 14;
+    const chartL = ox + PAD;
+    const chartR = ox + cw - PAD;
+    const chartT = areaY + PAD + (label ? 18 : 6);
+    const chartB = areaY + areaH - PAD;
+    const chartW = chartR - chartL;
+    const chartH = chartB - chartT;
+
+    // 葉の数を再帰的にカウント
+    function leafCount(node) {
+      if (!node.children || node.children.length === 0) return 1;
+      return node.children.reduce((s, c) => s + leafCount(c), 0);
+    }
+    // 深さ
+    function treeDepth(node) {
+      if (!node.children || node.children.length === 0) return 1;
+      return 1 + Math.max(...node.children.map(treeDepth));
+    }
+
+    const totalLeaves = leafCount(root);
+    const depth       = treeDepth(root);
+    if (totalLeaves === 0 || depth === 0) return;
+
+    const levelH = chartH / depth;
+    const nodeR  = Math.max(10, Math.min(24, levelH * 0.32, chartW / (totalLeaves + 1) * 0.65));
+    const fs     = Math.max(8, Math.min(14, nodeR * 0.75));
+
+    // 位置を割り当て: 葉を均等配置、内部ノードは子の中心
+    let leafIdx = 0;
+    function assignPos(node, d) {
+      if (!node.children || node.children.length === 0) {
+        node._x = chartL + chartW * (leafIdx + 0.5) / totalLeaves;
+        node._y = chartT + levelH * (d + 0.5);
+        leafIdx++;
+      } else {
+        for (const child of node.children) assignPos(child, d + 1);
+        const xs = node.children.map(c => c._x);
+        node._x = (Math.min(...xs) + Math.max(...xs)) / 2;
+        node._y = chartT + levelH * (d + 0.5);
+      }
+    }
+    leafIdx = 0;
+    assignPos(root, 0);
+
+    ctx.save();
+
+    if (label) {
+      ctx.fillStyle = "#6a8faf";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText(label, ox + PAD, areaY + 14);
+    }
+
+    // ── エッジを描画 ──────────────────────────────────────────────────────────
+    function drawEdges(node) {
+      for (const child of (node.children || [])) {
+        ctx.beginPath();
+        ctx.moveTo(node._x, node._y);
+        ctx.lineTo(child._x, child._y);
+        if (child.pruned_here || child.hl === "pruned") {
+          ctx.strokeStyle = "#888888";
+          ctx.lineWidth   = 0.8;
+          ctx.setLineDash([5, 4]);
+        } else if (child.hl === "best") {
+          ctx.strokeStyle = "#44cc44";
+          ctx.lineWidth   = 2.5;
+          ctx.setLineDash([]);
+        } else {
+          ctx.strokeStyle = th.edgeColor;
+          ctx.lineWidth   = 1.5;
+          ctx.setLineDash([]);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        drawEdges(child);
+      }
+    }
+    drawEdges(root);
+
+    // ── ノードを描画 ──────────────────────────────────────────────────────────
+    function drawNode(node) {
+      const x = node._x, y = node._y;
+      const hl        = node.hl;
+      const isLeaf    = !node.children || node.children.length === 0;
+      const isPruned  = hl === "pruned" || !!node.pruned_here;
+
+      // プレイヤー別ボーダー色
+      const borderColor = isPruned   ? "#888888"
+                        : node.player === "MAX" ? "#4488ff"
+                        : node.player === "MIN" ? "#ff6644"
+                        :                         "#aaaaaa";
+
+      // ハイライト塗り色
+      const hlFill = hl === "active"  ? "#ffee00"
+                   : hl === "best"    ? "#44dd44"
+                   : hl === "done"    ? "#44aa88"
+                   : hl === "pruned"  ? "#555555"
+                   : null;
+
+      // ── シェイプ (葉=四角, 内部=円) ─────────────────────────────────────
+      ctx.beginPath();
+      if (isLeaf) {
+        const hw = nodeR * 0.95;
+        ctx.rect(x - hw, y - hw, hw * 2, hw * 2);
+      } else {
+        ctx.arc(x, y, nodeR, 0, Math.PI * 2);
+      }
+
+      ctx.fillStyle = isPruned ? "#333333" : th.nodeBg;
+      ctx.fill();
+
+      if (hlFill) {
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle   = hlFill;
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.strokeStyle = hlFill || borderColor;
+      ctx.lineWidth   = (hl === "best" || hl === "active") ? 3 : 1.5;
+      ctx.stroke();
+
+      // 枝刈りノード: X マーク
+      if (isPruned) {
+        ctx.strokeStyle = "#ff4444";
+        ctx.lineWidth   = 2;
+        const m = nodeR * 0.5;
+        ctx.beginPath(); ctx.moveTo(x - m, y - m); ctx.lineTo(x + m, y + m); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + m, y - m); ctx.lineTo(x - m, y + m); ctx.stroke();
+        return;
+      }
+
+      // ── ノード内の値テキスト ──────────────────────────────────────────────
+      const valStr = (node.value !== null && node.value !== undefined)
+                   ? String(node.value) : "?";
+      ctx.fillStyle    = th.cellText;
+      ctx.font         = `bold ${fs}px monospace`;
+      ctx.textAlign    = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(valStr, x, y);
+      ctx.textBaseline = "alphabetic";
+
+      // ── ノード上: プレイヤーラベル (内部ノードのみ) ───────────────────────
+      if (!isLeaf) {
+        ctx.fillStyle    = borderColor;
+        ctx.font         = `${Math.max(7, fs - 1)}px sans-serif`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(node.player, x, y - nodeR - 2);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      // ── ノード下: α/β 注釈 ───────────────────────────────────────────────
+      const INF = 999;
+      const aStr = (node.alpha !== null && node.alpha !== undefined)
+                 ? (node.alpha === -INF ? "-∞" : String(node.alpha)) : null;
+      const bStr = (node.beta  !== null && node.beta  !== undefined)
+                 ? (node.beta  ===  INF ? "+∞" : String(node.beta))  : null;
+
+      if (aStr !== null || bStr !== null) {
+        ctx.fillStyle    = "#aaddff";
+        ctx.font         = `${Math.max(7, fs - 2)}px monospace`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "top";
+        const anno = [aStr !== null ? `α=${aStr}` : null, bStr !== null ? `β=${bStr}` : null]
+                     .filter(Boolean).join(" ");
+        ctx.fillText(anno, x, y + nodeR + 3);
+        ctx.textBaseline = "alphabetic";
+      }
+
+      // ── ノードID (葉のみ小さく表示) ─────────────────────────────────────
+      if (isLeaf) {
+        ctx.fillStyle    = "#888888";
+        ctx.font         = `${Math.max(6, fs - 3)}px sans-serif`;
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(node.id, x, y + nodeR * 1.05 + 2);
+        ctx.textBaseline = "alphabetic";
+      }
+    }
+
+    function drawAllNodes(node) {
+      drawNode(node);
+      for (const child of (node.children || [])) drawAllNodes(child);
+    }
+    drawAllNodes(root);
 
     ctx.restore();
   }
