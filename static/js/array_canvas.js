@@ -2751,7 +2751,7 @@ class ArrayCanvas {
     if (totalLeaves === 0 || depth === 0) return;
 
     const levelH = chartH / depth;
-    const nodeR  = Math.max(10, Math.min(24, levelH * 0.32, chartW / (totalLeaves + 1) * 0.65));
+    const nodeR  = Math.max(7, Math.min(24, levelH * 0.32, chartW / (totalLeaves + 1) * 0.65));
     const fs     = Math.max(8, Math.min(14, nodeR * 0.75));
 
     // 位置を割り当て: 葉を均等配置、内部ノードは子の中心
