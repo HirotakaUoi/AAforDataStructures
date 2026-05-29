@@ -75,6 +75,12 @@ function _algoSupportsSortMethod(algoId) {
   return !!(algo?.meta?.sort_method);
 }
 
+/** アルゴリズム ID が段数セレクト (depth_select) をサポートするか */
+function _algoSupportsDepthSel(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.depth_select);
+}
+
 /** キー型ごとのハッシュ関数オプション */
 const _KEY_TYPE_FUNCS = {
   int:   [
@@ -384,6 +390,14 @@ class ArrayPanel {
           <option value="shell">シェルソート</option>
           <option value="insert">挿入ソート</option>
         </select>
+        <label class="lbl-depth-sel" style="display:none;white-space:nowrap;margin-right:6px">段数
+          <select class="sel-depth" style="margin-left:4px">
+            <option value="3">3段</option>
+            <option value="4">4段</option>
+            <option value="5">5段</option>
+            <option value="6">6段</option>
+          </select>
+        </label>
         <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:6px"></span>
       </div>
 
@@ -471,6 +485,7 @@ class ArrayPanel {
     const algoId       = Number(this.el.querySelector(".sel-algo").value);
     const type         = _algoType(algoId);
     const hasInitData  = _algoSupportsInitData(algoId);
+    const hasDepthSel  = _algoSupportsDepthSel(algoId);
     const hasOps       = _algoSupportsOps(algoId);
     const hasHashFunc  = _algoSupportsHashFunc(algoId);
 
@@ -478,14 +493,31 @@ class ArrayPanel {
     this.el.querySelector(".lbl-condition").style.display = type === "sort"   ? "" : "none";
     // lbl-size は常に表示 (misc でも num_items は参照される)
 
-    // 初期状態行
+    // 初期状態行（テキスト入力 or 段数セレクトのいずれかが必要なら表示）
     const algo = algorithms.find(a => a.id === algoId);
-    this.el.querySelector(".init-data-row").style.display = hasInitData ? "" : "none";
-    if (!hasInitData) {
+    this.el.querySelector(".init-data-row").style.display = (hasInitData || hasDepthSel) ? "" : "none";
+
+    // 段数セレクト表示制御
+    const depthLbl = this.el.querySelector(".lbl-depth-sel");
+    const depthSel = this.el.querySelector(".sel-depth");
+    depthLbl.style.display = hasDepthSel ? "" : "none";
+    if (hasDepthSel) {
+      // テキスト入力・設定ボタンを隠し、段数セレクトの値を _initData にセット
+      this.el.querySelector(".lbl-init-data").style.display = "none";
+      this.el.querySelector(".btn-set-init-data").style.display = "none";
+      this.el.querySelector(".init-data-info").textContent = "";
+      this._initData = [depthSel.value];
+    }
+
+    if (!hasInitData && !hasDepthSel) {
       this._initData = null;
       this.el.querySelector(".inp-init-data").value = "";
       this.el.querySelector(".init-data-info").textContent = "";
-    } else {
+    }
+    if (hasInitData) {
+      // テキスト入力部分を表示・設定
+      this.el.querySelector(".lbl-init-data").style.display = "";
+      this.el.querySelector(".btn-set-init-data").style.display = "";
       // ラベルをアルゴリズム固有の名称に変更（なければ「初期状態」）
       const lbl = this.el.querySelector(".lbl-init-data");
       lbl.childNodes[0].textContent = (algo?.meta?.init_data_label || "初期状態") + "\n";
@@ -585,6 +617,12 @@ class ArrayPanel {
     // ソート手法: 変更時にプレビュー更新
     q(".sel-sort-method").addEventListener("change", () => {
       this._sortMethod = q(".sel-sort-method").value;
+      if (!this.isRunning) this._drawPreview();
+    });
+
+    // 段数セレクト: 変更時に _initData を更新してプレビュー更新
+    q(".sel-depth").addEventListener("change", () => {
+      this._initData = [q(".sel-depth").value];
       if (!this.isRunning) this._drawPreview();
     });
 

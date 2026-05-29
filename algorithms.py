@@ -3522,12 +3522,8 @@ AlgorithmList = [
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),
     ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc"}),
     # ── Ch.12: ゲーム木 ──
-    ("ミニマックス法  (Ch.12)", minimax_game_tree,
-     {"type": "misc", "init_data": True, "init_data_type": "expr",
-      "init_data_label": "段数", "init_data_hint": "3〜6 (省略時=3)"}),
-    ("α-β 枝刈り  (Ch.12)",    alpha_beta_pruning,
-     {"type": "misc", "init_data": True, "init_data_type": "expr",
-      "init_data_label": "段数", "init_data_hint": "3〜6 (省略時=3)"}),
+    ("ミニマックス法  (Ch.12)", minimax_game_tree, {"type": "misc", "depth_select": True}),
+    ("α-β 枝刈り  (Ch.12)",    alpha_beta_pruning, {"type": "misc", "depth_select": True}),
     # ── Ch.10: ハッシュ表 ──
     ("ハッシュ表 オープンアドレス法  (Ch.10)", hash_open_addressing,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
