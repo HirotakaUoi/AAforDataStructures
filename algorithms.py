@@ -3469,6 +3469,281 @@ def alpha_beta_pruning(n, **kwargs):
     yield frame(f"α-β 枝刈り完了: 最終値 = {root['value']}", "lightgreen", finished=True)
 
 
+# ---------------------------------------------------------------------------
+# Ch.6: クイックソート (QuickSort / Stack / Queue / OptimalQSS / OptimalQSQ)
+# ---------------------------------------------------------------------------
+# 参考: C++/QuickSort1.cpp, QuickSortStack.cpp, QuickSortQueue.cpp,
+#       OptimalQSS.cpp, OptimalQSQ.cpp
+# ---------------------------------------------------------------------------
+
+_QS_PIV  = "#ff4444"   # ピボット (赤)
+_QS_DONE = "#44aa44"   # 確定済み (緑)
+_QS_I    = "#ffee44"   # i ポインタ (黄)
+_QS_J    = "#dd66dd"   # j ポインタ (マゼンタ)
+
+
+def _qs_bar(values, colors, first=None, last=None, weight=2):
+    """縦棒グラフオブジェクトを生成する"""
+    hl = {str(i): c for i, c in enumerate(colors) if c is not None}
+    fills = ([{"from": first, "to": last, "color": "rgba(100,150,220,0.12)"}]
+             if first is not None and last is not None and first <= last else [])
+    return {"id": "arr", "type": "array1d", "values": list(values),
+            "highlights": hl, "fills": fills, "weight": weight, "label": ""}
+
+
+def _qs_stk_cell(pairs):
+    """スタック表示 (bottom→top, 先頭=右が top)"""
+    cells = [f"({f},{l})" for f, l in pairs]
+    hl = {len(cells) - 1: _QS_I} if cells else {}
+    return _c("stk", cells or [" "], f"スタック ({len(pairs)} 組)", hl=hl, weight=0.8)
+
+
+def _qs_que_cell(pairs):
+    """キュー表示 (front→back, 先頭=左が front)"""
+    cells = [f"({f},{l})" for f, l in pairs]
+    hl = {0: _QS_I} if cells else {}
+    return _c("que", cells or [" "], f"キュー ({len(pairs)} 組)", hl=hl, weight=0.8)
+
+
+def _qs_partition(data, colors, first, last, ds_obj=None):
+    """
+    Hoare-like パーティション処理ジェネレータ。
+    フレームを yield し、StopIteration.value でピボット最終位置を返す。
+    ds_obj: スタック/キュー表示オブジェクト（None = 棒グラフのみ）
+    """
+    def frm(msg, color="yellow"):
+        bar = _qs_bar(data, colors, first, last)
+        objs = [bar, ds_obj] if ds_obj is not None else [bar]
+        return _f(objs, [{"message": msg, "color": color}])
+
+    pivot = data[last]
+    colors[last] = _QS_PIV
+    yield frm(f"pivot={pivot}  [{first}..{last}]")
+
+    i = first; j = last - 1
+    colors[i] = _QS_I
+    if j >= first:
+        colors[j] = _QS_J
+
+    while True:
+        while i < last and data[i] < pivot:
+            colors[i] = None; i += 1
+            if i < last: colors[i] = _QS_I
+            yield frm(f"→ i={i}  data[{i}]={data[i]}", "#ffee44")
+        while j >= first and data[j] > pivot:
+            colors[j] = None; j -= 1
+            if j > first: colors[j] = _QS_J
+            yield frm(f"← j={j}  data[{j}]={data[j]}", "#dd66dd")
+        if i >= j:
+            break
+        data[i], data[j] = data[j], data[i]
+        yield frm(f"swap data[{i}]↔data[{j}]", "cyan")
+        colors[i] = colors[j] = None
+        i += 1; j -= 1
+
+    data[i], data[last] = data[last], data[i]
+    colors[last] = None
+    colors[i] = _QS_DONE
+    for k in range(first, last + 1):
+        if colors[k] in (_QS_I, _QS_J):
+            colors[k] = None
+    yield frm(f"pivot={pivot} → [{i}] 確定 ✓", "lightgreen")
+
+    return i   # StopIteration.value — `yield from` で受け取る
+
+
+def _qs_init(n, kwargs):
+    rng = random.Random(kwargs.get("seed", n))
+    return rng.sample(range(1, n + 1), n), [None] * n
+
+
+# ── 1. 通常クイックソート ────────────────────────────────────────────────────
+def quick_sort(n, **kwargs):
+    """通常クイックソート (再帰相当・データ構造表示なし)"""
+    data, colors = _qs_init(n, kwargs)
+
+    def frm(msg, color="white", finished=False):
+        return _f([_qs_bar(data, colors)], [{"message": msg, "color": color}], finished=finished)
+
+    stk = [(0, n - 1)]
+    yield frm(f"クイックソート  n={n}  開始")
+
+    while stk:
+        first, last = stk.pop()
+        if first >= last:
+            if first == last:
+                colors[first] = _QS_DONE
+            continue
+        pivot_pos = yield from _qs_partition(data, colors, first, last)
+        stk.append((pivot_pos + 1, last))
+        stk.append((first, pivot_pos - 1))
+
+    yield frm("ソート完了!", "lightgreen", finished=True)
+
+
+# ── 2. QuickSortStack ────────────────────────────────────────────────────────
+def quick_sort_stack(n, **kwargs):
+    """QuickSortStack: スタックを明示的に使うクイックソート"""
+    data, colors = _qs_init(n, kwargs)
+    stk = [(0, n - 1)]
+
+    def frm(msg, color="white", finished=False):
+        return _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                  [{"message": msg, "color": color}], finished=finished)
+
+    yield frm(f"Push (0,{n-1}) → スタック初期化  n={n}")
+
+    while stk:
+        first, last = stk.pop()
+        yield _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                 [{"message": f"Pop ({first},{last}) → [{first}..{last}] を処理", "color": "yellow"}])
+
+        if first >= last:
+            if first == last:
+                colors[first] = _QS_DONE
+                yield _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                         [{"message": f"data[{first}] 単要素確定", "color": "lightgreen"}])
+            continue
+
+        pivot_pos = yield from _qs_partition(data, colors, first, last, _qs_stk_cell(stk))
+
+        # 右範囲を先に Push → 左範囲が top になり次に処理される
+        stk.append((pivot_pos + 1, last))
+        stk.append((first, pivot_pos - 1))
+        yield _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                 [{"message": f"Push ({pivot_pos+1},{last}), ({first},{pivot_pos-1})", "color": "cyan"}])
+
+    yield frm("ソート完了!  スタック空", "lightgreen", finished=True)
+
+
+# ── 3. QuickSortQueue ────────────────────────────────────────────────────────
+def quick_sort_queue(n, **kwargs):
+    """QuickSortQueue: キューを明示的に使うクイックソート"""
+    from collections import deque
+    data, colors = _qs_init(n, kwargs)
+    que = deque([(0, n - 1)])
+
+    def que_list():
+        return list(que)
+
+    def frm(msg, color="white", finished=False):
+        return _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                  [{"message": msg, "color": color}], finished=finished)
+
+    yield frm(f"Enqueue (0,{n-1}) → キュー初期化  n={n}")
+
+    while que:
+        first, last = que.popleft()
+        yield _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                 [{"message": f"Dequeue ({first},{last}) → [{first}..{last}] を処理", "color": "yellow"}])
+
+        if first >= last:
+            if first == last:
+                colors[first] = _QS_DONE
+                yield _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                         [{"message": f"data[{first}] 単要素確定", "color": "lightgreen"}])
+            continue
+
+        pivot_pos = yield from _qs_partition(data, colors, first, last, _qs_que_cell(que_list()))
+
+        # 左範囲 → 右範囲の順に Enqueue (FIFO で左から処理)
+        que.append((first, pivot_pos - 1))
+        que.append((pivot_pos + 1, last))
+        yield _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                 [{"message": f"Enqueue ({first},{pivot_pos-1}), ({pivot_pos+1},{last})", "color": "cyan"}])
+
+    yield frm("ソート完了!  キュー空", "lightgreen", finished=True)
+
+
+# ── 4. OptimalQSS ────────────────────────────────────────────────────────────
+def optimal_qss(n, **kwargs):
+    """OptimalQSS: サイズ 1 の部分範囲をスキップするスタック版最適化クイックソート"""
+    data, colors = _qs_init(n, kwargs)
+    stk = [(0, n - 1)]
+
+    def frm(msg, color="white", finished=False):
+        return _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                  [{"message": msg, "color": color}], finished=finished)
+
+    yield frm(f"Push (0,{n-1}) → スタック初期化  [サイズ 1 はスキップ]  n={n}")
+
+    while stk:
+        first, last = stk.pop()
+        yield _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                 [{"message": f"Pop ({first},{last}) → [{first}..{last}] を処理", "color": "yellow"}])
+
+        if first >= last:   # サイズ 0 or 1 は確定済みのはず
+            continue
+
+        pivot_pos = yield from _qs_partition(data, colors, first, last, _qs_stk_cell(stk))
+
+        # サイズ 1 の部分範囲はそのまま確定 (Push しない)
+        pushed = []
+        if pivot_pos + 1 < last:          # 右部分がサイズ > 1
+            stk.append((pivot_pos + 1, last))
+            pushed.append(f"({pivot_pos+1},{last})")
+        elif pivot_pos + 1 == last:
+            colors[last] = _QS_DONE       # 右が 1 要素 → 即確定
+        if first < pivot_pos - 1:         # 左部分がサイズ > 1 → top に積む
+            stk.append((first, pivot_pos - 1))
+            pushed.append(f"({first},{pivot_pos-1})")
+        elif first == pivot_pos - 1:
+            colors[first] = _QS_DONE      # 左が 1 要素 → 即確定
+
+        msg = (f"Push {', '.join(pushed)}  [1要素はスキップ]" if pushed
+               else "サブ範囲なし (すべて確定)")
+        yield _f([_qs_bar(data, colors), _qs_stk_cell(stk)],
+                 [{"message": msg, "color": "cyan"}])
+
+    yield frm("ソート完了!  スタック空", "lightgreen", finished=True)
+
+
+# ── 5. OptimalQSQ ────────────────────────────────────────────────────────────
+def optimal_qsq(n, **kwargs):
+    """OptimalQSQ: サイズ 1 の部分範囲をスキップするキュー版最適化クイックソート"""
+    from collections import deque
+    data, colors = _qs_init(n, kwargs)
+    que = deque([(0, n - 1)])
+
+    def que_list():
+        return list(que)
+
+    def frm(msg, color="white", finished=False):
+        return _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                  [{"message": msg, "color": color}], finished=finished)
+
+    yield frm(f"Enqueue (0,{n-1}) → キュー初期化  [サイズ 1 はスキップ]  n={n}")
+
+    while que:
+        first, last = que.popleft()
+        yield _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                 [{"message": f"Dequeue ({first},{last}) → [{first}..{last}] を処理", "color": "yellow"}])
+
+        if first >= last:
+            continue
+
+        pivot_pos = yield from _qs_partition(data, colors, first, last, _qs_que_cell(que_list()))
+
+        enqueued = []
+        if first < pivot_pos - 1:         # 左部分がサイズ > 1
+            que.append((first, pivot_pos - 1))
+            enqueued.append(f"({first},{pivot_pos-1})")
+        elif first == pivot_pos - 1:
+            colors[first] = _QS_DONE
+        if pivot_pos + 1 < last:          # 右部分がサイズ > 1
+            que.append((pivot_pos + 1, last))
+            enqueued.append(f"({pivot_pos+1},{last})")
+        elif pivot_pos + 1 == last:
+            colors[last] = _QS_DONE
+
+        msg = (f"Enqueue {', '.join(enqueued)}  [1要素はスキップ]" if enqueued
+               else "サブ範囲なし (すべて確定)")
+        yield _f([_qs_bar(data, colors), _qs_que_cell(que_list())],
+                 [{"message": msg, "color": "cyan"}])
+
+    yield frm("ソート完了!  キュー空", "lightgreen", finished=True)
+
+
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
     ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
@@ -3510,6 +3785,12 @@ AlgorithmList = [
       "init_data": True, "init_data_type": "expr",
       "init_data_hint": "（例: 100）  省略時=100",
       "init_data_label": "探索回数"}),
+    # ── Ch.6: クイックソート (スタック/キュー応用) ──
+    ("クイックソート  (Ch.6)",                           quick_sort,       {"type": "misc"}),
+    ("クイックソート・スタック版  (Ch.6)",                quick_sort_stack, {"type": "misc"}),
+    ("クイックソート・キュー版  (Ch.6)",                  quick_sort_queue, {"type": "misc"}),
+    ("最適クイックソート・スタック版 OptimalQSS  (Ch.6)", optimal_qss,      {"type": "misc"}),
+    ("最適クイックソート・キュー版 OptimalQSQ  (Ch.6)",   optimal_qsq,      {"type": "misc"}),
     # ── Ch.7: 二分探索木 / 二分木走査 / 演算木 ──
     ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc"}),
     ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc"}),
