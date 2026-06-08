@@ -1365,86 +1365,119 @@ def rpn_eval_list(n, **kwargs):
 
 
 def rpn_direct_b(n, **kwargs):
-    """Sample5_7_1_2_3: B型式(中置記法)を RPN 変換せずに直接計算
-    入力形式: 各数値を個別にカッコで囲む完全括弧記法
-    例: (((2)+(3))*((8)-(1))) = 35
+    """Sample5_7_1_2_3: B型式(中置記法)を 0+番兵 + 演算子先行処理で直接計算
+    0+番兵アルゴリズムに「演算子を見たとき opr!='' なら先に do_op」を追加
+    → 各数値を個別括弧で囲まなくても正しく計算できる
+    例: 3*(2-3+(4/2-1*(5-6/(7/(8-9)))))+100 = 97
+        (2+3)*(8-1) = 35
     """
-    # init_data: B型式の式文字列（空白除去済み）を受け取る
     _ALLOWED = set("0123456789+-*/()")
     init_data = kwargs.get("init_data")
     if init_data:
         raw = "".join(str(x) for x in init_data).replace(" ", "")
-        expr_str = raw if raw and all(c in _ALLOWED for c in raw) else "(((2)+(3))*((8)-(1)))"
+        expr_str = raw if raw and all(c in _ALLOWED for c in raw) else "(2+3)*(8-1)"
     else:
-        expr_str = "(((2)+(3))*((8)-(1)))"
-    expr     = list(expr_str)
-    base     = [{"message": f"B型式直接計算: {expr_str}  (Sample5_7_1_2_3)", "color": "white"}]
+        expr_str = "(2+3)*(8-1)"
 
-    oprs   = []   # char スタック (演算子用)
-    nums   = [0]  # int スタック, 初期値 0 を Push
-    opr    = '+'  # 現在保持している演算子 (初期値 '+')
+    expr = list(expr_str)
+    N    = len(expr)
+    base = [{"message": f"B型式直接計算: {expr_str}  (Sample5_7_1_2_3)", "color": "white"}]
 
-    # スタック最大深さを事前推定
-    _depth = max(2, sum(1 for c in expr if c == '('))
+    oprs = []   # 演算子スタック（'(' 時に push）
+    nums = [0]  # 数値スタック — 初期値 0 を番兵として Push
+    opr  = '+'  # 現在保持している演算子（初期値 '+'）
+
+    _depth    = max(2, sum(1 for c in expr if c == '('))
     _oprs_max = _depth
-    _nums_max = _depth + 1   # nums は oprs + 1 (初期 0 があるため)
+    _nums_max = _depth + 2
 
     def do_op(op):
+        if len(nums) < 2:
+            raise IndexError(f"数値スタックが不足 (演算子 '{op}' 適用不可)")
         val2 = nums.pop(); val1 = nums.pop()
-        res  = (val1 + val2 if op == '+' else val1 - val2 if op == '-'
-                else val1 * val2 if op == '*' else val1 // val2)
+        if   op == '+': res = val1 + val2
+        elif op == '-': res = val1 - val2
+        elif op == '*': res = val1 * val2
+        elif op == '/':
+            if val2 == 0:
+                raise ZeroDivisionError(f"0 除算: {val1} / {val2}")
+            res = val1 // val2
+        else:
+            res = val1 + val2   # フォールバック
         nums.append(res)
         return val1, val2, res
 
     def frame(ci, msg, color="lightgreen", finished=False):
-        e_hl = {j: "#4466aa" for j in range(ci)}
-        if 0 <= ci < len(expr):
+        e_hl      = {j: "#4466aa" for j in range(ci)}
+        if 0 <= ci < N:
             e_hl[ci] = "#bb66ff"
-        o_top  = len(oprs) - 1
-        n_top  = len(nums) - 1
-        o_hl   = {o_top: "#ff8844"} if oprs else {}
-        n_hl   = {n_top: "#44cc66"} if nums  else {}
-        opr_color = "cyan" if opr != ' ' else "#888888"
-        o_vals = list(oprs)
-        n_vals = [str(x) for x in nums]
-        # row レイアウト: 演算子スタック | 数値スタック | opr変数 | B型式入力(右)
+        o_top     = len(oprs) - 1
+        n_top     = len(nums) - 1
+        o_hl      = {o_top: "#ff8844"} if oprs else {}
+        n_hl      = {n_top: "#44cc66"} if nums  else {}
+        opr_color = "cyan" if opr not in (' ', '') else "#888888"
         row_obj = {"type": "row", "weight": 1, "children": [
-            _stack_v("oprs", o_vals, o_top, _oprs_max,
+            _stack_v("oprs", list(oprs), o_top, _oprs_max,
                      f"演算子スタック  top={o_top}", hl=o_hl, weight=1.0),
-            _stack_v("nums", n_vals, n_top, _nums_max,
-                     f"数値スタック  top={n_top}",  hl=n_hl, weight=1.0),
-            _c("opr_var", [opr if opr != ' ' else '空'], "opr (一時保存演算子)",
+            _stack_v("nums", [str(x) for x in nums], n_top, _nums_max,
+                     f"数値スタック  top={n_top}", hl=n_hl, weight=1.0),
+            _c("opr_var", [opr if opr not in (' ', '') else '空'], "opr",
                hl={0: opr_color}, weight=0.5),
             _c("expr", expr, f"B型式: {expr_str}", hl=e_hl, weight=1.5),
         ]}
         return _f([row_obj], base + [{"message": msg, "color": color}], finished=finished)
 
+    def error_frame(ci, msg):
+        return frame(ci, f"エラー: {msg}", color="#ff4444", finished=True)
+
     yield frame(0, "初期状態: opr='+', numbers=[0]  (= '0+式' として処理開始)")
 
-    N = len(expr)
     i = 0
     while i < N:
         c = expr[i]
+
         if c in '+-*/':
+            # ★ 演算子を見たとき: 保留中の opr があれば先に適用して番兵0を消費
+            if opr != ' ':
+                try:
+                    v1, v2, res = do_op(opr)
+                    yield frame(i, f"先行処理 do_op('{opr}'):  {v1} {opr} {v2} = {res}", color="orange")
+                except (IndexError, ZeroDivisionError) as e:
+                    yield error_frame(i, str(e)); return
+                opr = ' '
             opr = c
             yield frame(i, f"演算子 '{c}' を opr に保存", color="cyan")
+
         elif c == '(':
             pushed_opr = opr
             oprs.append(opr)
             opr = '+'
             nums.append(0)
             yield frame(i,
-                        f"'(' → opr='{pushed_opr}' を oprs に Push  /  nums に 0 Push  /  opr='+' にリセット",
+                        f"'(' → opr='{pushed_opr}' を oprs に Push / nums に 0 Push / opr='+' にリセット",
                         color="#ff8844")
+
         elif c == ')':
+            # 数字の直後でまだ opr が残っていれば先に適用
+            if opr != ' ':
+                try:
+                    v1, v2, res = do_op(opr)
+                    yield frame(i, f"')' 前処理 do_op('{opr}'):  {v1} {opr} {v2} = {res}", color="orange")
+                except (IndexError, ZeroDivisionError) as e:
+                    yield error_frame(i, str(e)); return
+                opr = ' '
+            if not oprs:
+                yield error_frame(i, "oprs スタックが空なのに ')' が現れました — 括弧が不正です"); return
             popped = oprs.pop()
             opr = popped
-            yield frame(i, f"')' → oprs から '{popped}' を Pop  →  opr='{popped}'",
-                        color="#ff8844")
-            v1, v2, res = do_op(opr)
+            yield frame(i, f"')' → oprs から '{popped}' を Pop → opr='{popped}'", color="#ff8844")
+            try:
+                v1, v2, res = do_op(opr)
+            except (IndexError, ZeroDivisionError) as e:
+                yield error_frame(i, str(e)); return
             opr = ' '
-            yield frame(i, f"do_op('{popped}'):  {v1} {popped} {v2} = {res}  →  opr=' '",
-                        color="orange")
+            yield frame(i, f"do_op('{popped}'):  {v1} {popped} {v2} = {res}  → opr=' '", color="orange")
+
         elif c.isdigit():
             num = int(c)
             while i + 1 < N and expr[i + 1].isdigit():
@@ -1452,20 +1485,23 @@ def rpn_direct_b(n, **kwargs):
                 num = num * 10 + int(expr[i])
             nums.append(num)
             yield frame(i, f"数字 '{num}' → nums に Push", color="lightgreen")
-            # 次が ')' または末尾なら即 do_op
+            # 次が ')' または末尾なら即 do_op（従来通り）
             j = i + 1
             while j < N and expr[j] == ' ':
                 j += 1
             if j >= N or expr[j] == ')':
                 cur_opr = opr
-                v1, v2, res = do_op(opr)
+                try:
+                    v1, v2, res = do_op(opr)
+                except (IndexError, ZeroDivisionError) as e:
+                    yield error_frame(i, str(e)); return
                 opr = ' '
-                yield frame(i,
-                            f"次が ')' → do_op('{cur_opr}'):  {v1} {cur_opr} {v2} = {res}  →  opr=' '",
+                yield frame(i, f"次が ')' → do_op('{cur_opr}'):  {v1} {cur_opr} {v2} = {res}  → opr=' '",
                             color="orange")
+
         i += 1
 
-    result = nums[0] if nums else '?'
+    result = nums[-1] if nums else '?'
     yield frame(N - 1, f"計算完了!  {expr_str} = {result}", color="#44aa44", finished=True)
 
 
@@ -3744,6 +3780,8 @@ def optimal_qsq(n, **kwargs):
     yield frm("ソート完了!  キュー空", "lightgreen", finished=True)
 
 
+
+
 AlgorithmList = [
     # ── Ch.3: vector / イテレータ ──
     ("vector capacity – 2倍拡張  (Ch.3)",    vector_capacity_double,  {"type": "misc"}),
@@ -3773,7 +3811,7 @@ AlgorithmList = [
       "init_data_hint": "例: (2+3)*(8-1)"}),
     ("B型式 直接計算  (Ch.5)",      rpn_direct_b,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
-      "init_data_hint": "例: (((2)+(3))*((8)-(1)))"}),
+      "init_data_hint": "例: ((2)+(3))*((8)-(1))"}),
     # ── Ch.6: ソート+二分探索 / 逐次探索 ──
     ("ソート+二分探索  (Ch.6)", sample6_1_binary,
      {"type": "misc", "sort_method": True,
