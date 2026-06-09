@@ -407,10 +407,10 @@ class ArrayPanel {
         </label>
         <label class="lbl-traversal-sel" style="display:none;white-space:nowrap;margin-right:6px">走査
           <select class="sel-traversal" style="margin-left:4px">
-            <option value="bfs">BFS（幅優先）</option>
-            <option value="preorder">DFS 前順</option>
-            <option value="inorder">DFS 中順</option>
-            <option value="postorder">DFS 後順</option>
+            <option value="bfs">BFS</option>
+            <option value="preorder">Pre-Order</option>
+            <option value="inorder">In-Order</option>
+            <option value="postorder">Post-Order</option>
             <option value="all">全走査</option>
           </select>
         </label>
