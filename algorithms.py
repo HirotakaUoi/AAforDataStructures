@@ -2755,8 +2755,9 @@ def _make_complete_btree(vals):
     return build(0)
 
 
-def _clone_bt(node, visited_keys=None, active_key=None):
-    """二分木をディープコピーし、visited_keys を highlight 付きで返す"""
+def _clone_bt(node, visited_keys=None, active_key=None, visit_order_map=None):
+    """二分木をディープコピーし、visited_keys を highlight 付きで返す。
+    visit_order_map: {key: 訪問順番号} を渡すと各ノードに visit_order フィールドを付与。"""
     if node is None:
         return None
     v = node["key"]
@@ -2764,12 +2765,13 @@ def _clone_bt(node, visited_keys=None, active_key=None):
     is_visited = (visited_keys is not None and v in visited_keys)
     hl = "yellow" if is_active else ("#44aa44" if is_visited else None)
     return {
-        "key":       v,
-        "color":     node.get("color", "#4472C4"),
-        "highlight": hl,
-        "dim":       False,
-        "left":      _clone_bt(node["left"],  visited_keys, active_key),
-        "right":     _clone_bt(node["right"], visited_keys, active_key),
+        "key":         v,
+        "color":       node.get("color", "#4472C4"),
+        "highlight":   hl,
+        "dim":         False,
+        "visit_order": visit_order_map.get(v) if visit_order_map else None,
+        "left":        _clone_bt(node["left"],  visited_keys, active_key, visit_order_map),
+        "right":       _clone_bt(node["right"], visited_keys, active_key, visit_order_map),
     }
 
 
@@ -2835,23 +2837,28 @@ def btree_traversals(n, **kwargs):
         yield _f([_btview_obj("tree", _clone_bt(root))],
                  base + [{"message": f"── {tname} ──", "color": "cyan"}])
 
-        for key in order:
+        for step, key in enumerate(order):
             visited.add(key)
-            tree_snap = _clone_bt(root, visited_keys=visited - {key}, active_key=key)
-            seq_str = " → ".join(str(k) for k in order[:len(visited)])
+            # 訪問済みノードに順番号を付与（現在のノードは step+1 番）
+            vom = {k: i + 1 for i, k in enumerate(order[:step + 1])}
+            tree_snap = _clone_bt(root, visited_keys=visited - {key}, active_key=key,
+                                  visit_order_map=vom)
+            seq_str = " → ".join(str(k) for k in order[:step + 1])
             yield _f(
                 [_btview_obj("tree", tree_snap)],
                 base + [
                     {"message": f"── {tname} ──", "color": "cyan"},
-                    {"message": f"訪問: {key}", "color": "yellow"},
+                    {"message": f"訪問: {key}  (#{step + 1})", "color": "yellow"},
                     {"message": f"順序: {seq_str}", "color": "lightgreen"},
                 ],
             )
 
-        # 完了フレーム（全ノード緑）
+        # 完了フレーム（全ノード緑・全番号表示）
+        vom_all = {k: i + 1 for i, k in enumerate(order)}
         seq_str = " → ".join(str(k) for k in order)
         yield _f(
-            [_btview_obj("tree", _clone_bt(root, visited_keys=set(order)))],
+            [_btview_obj("tree", _clone_bt(root, visited_keys=set(order),
+                                           visit_order_map=vom_all))],
             base + [
                 {"message": f"── {tname} 完了 ──", "color": "cyan"},
                 {"message": f"順序: {seq_str}", "color": "#44aa44"},

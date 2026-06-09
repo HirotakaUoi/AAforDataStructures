@@ -2203,6 +2203,26 @@ class ArrayCanvas {
         ctx.textBaseline = "middle";
         ctx.fillText(String(node.key), x, y);
         ctx.textBaseline = "alphabetic";
+
+        // 訪問順バッジ（右肩）
+        if (node.visit_order != null) {
+          const br  = Math.max(6, nodeR * 0.42);
+          const bx  = x + nodeR * 0.75;
+          const by  = y - nodeR * 0.75;
+          const bfs = Math.max(6, br * 1.1);
+          const bgColor = highlight === "yellow" ? "#ffcc00"
+                        : highlight             ? "#44aa44"
+                        : "#44aa44";
+          ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fillStyle = bgColor; ctx.fill();
+          ctx.strokeStyle = _acTheme().nodeBg; ctx.lineWidth = 1.5; ctx.stroke();
+          ctx.fillStyle    = _acTheme().badgeText;
+          ctx.font         = `bold ${bfs}px sans-serif`;
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(node.visit_order), bx, by);
+          ctx.textBaseline = "alphabetic";
+        }
       }
 
       drawNodes(node.left);
