@@ -81,6 +81,12 @@ function _algoSupportsDepthSel(algoId) {
   return !!(algo?.meta?.depth_select);
 }
 
+/** アルゴリズム ID が走査種別セレクト (traversal_select) をサポートするか */
+function _algoSupportsTraversalSel(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.traversal_select);
+}
+
 /** キー型ごとのハッシュ関数オプション */
 const _KEY_TYPE_FUNCS = {
   int:   [
@@ -299,6 +305,7 @@ class ArrayPanel {
     this._previewRequestId = 0;   // 非同期プレビューの競合防止カウンタ
     this._seed             = 0;   // グラフ等の乱数シード（プレビューと開始で共有）
     this._sortMethod       = "quick"; // ソート手法（sort_method 対応アルゴのみ）
+    this._traversal        = "bfs";   // 走査種別（traversal_select 対応アルゴのみ）
     this._initData         = null; // ユーザー指定の初期配列（init_data 対応アルゴのみ）
     this._ops              = null; // ユーザー指定の操作列（ops 対応アルゴのみ）
     this._hashFunc         = null; // ユーザー指定のハッシュ関数（hash_func 対応アルゴのみ）
@@ -398,6 +405,15 @@ class ArrayPanel {
             <option value="6">6段</option>
           </select>
         </label>
+        <label class="lbl-traversal-sel" style="display:none;white-space:nowrap;margin-right:6px">走査
+          <select class="sel-traversal" style="margin-left:4px">
+            <option value="bfs">BFS（幅優先）</option>
+            <option value="preorder">DFS 前順</option>
+            <option value="inorder">DFS 中順</option>
+            <option value="postorder">DFS 後順</option>
+            <option value="all">全走査</option>
+          </select>
+        </label>
         <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:6px"></span>
       </div>
 
@@ -495,7 +511,9 @@ class ArrayPanel {
 
     // 初期状態行（テキスト入力 or 段数セレクトのいずれかが必要なら表示）
     const algo = algorithms.find(a => a.id === algoId);
-    this.el.querySelector(".init-data-row").style.display = (hasInitData || hasDepthSel) ? "" : "none";
+    const hasTraversalSel_ = _algoSupportsTraversalSel(algoId);
+    this.el.querySelector(".init-data-row").style.display =
+      (hasInitData || hasDepthSel || hasTraversalSel_) ? "" : "none";
 
     // 段数セレクト表示制御
     const depthLbl = this.el.querySelector(".lbl-depth-sel");
@@ -544,6 +562,13 @@ class ArrayPanel {
     if (!hasSortMethod) {
       this._sortMethod = "quick";
       this.el.querySelector(".sel-sort-method").value = "quick";
+    }
+
+    // 走査種別セレクト（init-data-row 内）
+    this.el.querySelector(".lbl-traversal-sel").style.display = hasTraversalSel_ ? "" : "none";
+    if (!hasTraversalSel_) {
+      this._traversal = "bfs";
+      this.el.querySelector(".sel-traversal").value = "bfs";
     }
 
     // 操作列行
@@ -617,6 +642,12 @@ class ArrayPanel {
     // ソート手法: 変更時にプレビュー更新
     q(".sel-sort-method").addEventListener("change", () => {
       this._sortMethod = q(".sel-sort-method").value;
+      if (!this.isRunning) this._drawPreview();
+    });
+
+    // 走査種別: 変更時にプレビュー更新
+    q(".sel-traversal").addEventListener("change", () => {
+      this._traversal = q(".sel-traversal").value;
       if (!this.isRunning) this._drawPreview();
     });
 
@@ -973,6 +1004,9 @@ class ArrayPanel {
       if (_algoSupportsSortMethod(algoId)) {
         previewUrl += `&sort_method=${this._sortMethod}`;
       }
+      if (_algoSupportsTraversalSel(algoId)) {
+        previewUrl += `&traversal=${this._traversal}`;
+      }
       const res = await fetch(previewUrl);
       if (!res.ok) return;
       const frame = await res.json();
@@ -1052,7 +1086,8 @@ class ArrayPanel {
         }
         if (initTokens.length > 0) body.init_data = initTokens;
         if (this._ops && this._ops.length > 0) body.ops = this._ops;
-        if (_algoSupportsSortMethod(algoId)) body.sort_method = this._sortMethod;
+        if (_algoSupportsSortMethod(algoId))   body.sort_method = this._sortMethod;
+        if (_algoSupportsTraversalSel(algoId)) body.traversal   = this._traversal;
       }
 
       const res = await fetch("/api/start", {

@@ -2819,17 +2819,23 @@ def btree_traversals(n, **kwargs):
     vals = rng.sample(range(1, 100), N)
     root = _make_complete_btree(vals)
 
+    traversal = kwargs.get("traversal", "bfs")
+
     base = [{"message": f"完全二分木  N={N}", "color": "white"}]
 
     # ── 初期フレーム (全ノード未訪問) ──
     yield _f([_btview_obj("tree", _clone_bt(root))], base)
 
-    traversals = [
-        ("BFS (幅優先・レベル順)",     _bfs_order(root)),
-        ("DFS 前順 (pre-order: 根→左→右)", _preorder(root)),
-        ("DFS 中順 (in-order:  左→根→右)", _inorder(root)),
-        ("DFS 後順 (post-order: 左→右→根)", _postorder(root)),
+    all_traversals = [
+        ("bfs",      "BFS (幅優先・レベル順)",          _bfs_order(root)),
+        ("preorder", "DFS 前順 (pre-order: 根→左→右)",  _preorder(root)),
+        ("inorder",  "DFS 中順 (in-order:  左→根→右)",  _inorder(root)),
+        ("postorder","DFS 後順 (post-order: 左→右→根)", _postorder(root)),
     ]
+    traversals = [(tname, order) for key, tname, order in all_traversals
+                  if traversal in ("all", key)]
+    if not traversals:
+        traversals = [(all_traversals[0][1], all_traversals[0][2])]
 
     for tname, order in traversals:
         visited = set()
@@ -2865,9 +2871,14 @@ def btree_traversals(n, **kwargs):
             ],
         )
 
+    fin_msg = "全走査完了" if len(traversals) > 1 else f"{traversals[0][0]} 完了"
+    # 最後の走査の訪問順マップを使って全ノードに番号を残す
+    last_order = traversals[-1][1]
+    vom_fin = {k: i + 1 for i, k in enumerate(last_order)}
     yield _f(
-        [_btview_obj("tree", _clone_bt(root, visited_keys=set(vals)))],
-        base + [{"message": "全走査完了", "color": "#44aa44"}],
+        [_btview_obj("tree", _clone_bt(root, visited_keys=set(last_order),
+                                       visit_order_map=vom_fin))],
+        base + [{"message": fin_msg, "color": "#44aa44"}],
         finished=True,
     )
 
@@ -3838,7 +3849,7 @@ AlgorithmList = [
     ("最適クイックソート・キュー版 OptimalQSQ  (Ch.6)",   optimal_qsq,      {"type": "misc"}),
     # ── Ch.7: 二分探索木 / 二分木走査 / 演算木 ──
     ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc"}),
-    ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc"}),
+    ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc", "traversal_select": True}),
     ("演算木の構築  (Ch.7)",         expression_tree,   {"type": "misc"}),
     # ── Ch.8: 赤黒木・B木 ──
     ("赤黒木 挿入  (Ch.8)",         rb_tree_insert,     {"type": "misc"}),
