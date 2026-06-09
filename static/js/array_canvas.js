@@ -2099,7 +2099,7 @@ class ArrayCanvas {
     const PAD    = 12;
     const chartL = ox + PAD;
     const chartR = ox + cw - PAD;
-    const chartT = areaY + PAD + (label ? 14 : 4);
+    const chartT = areaY + PAD + (label ? 14 : 4) + 28;  // テキストオーバーレイとの重なりを避ける
     const chartB = areaY + areaH - PAD;
     const chartW = chartR - chartL;
     const chartH = chartB - chartT;
