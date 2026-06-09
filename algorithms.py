@@ -2951,28 +2951,56 @@ def _postorder_nodes(node):
 def expression_tree(n, **kwargs):
     """Ch.7: 演算木の構築 (RPN → スタック → 二分木) (Sample7_3)
     スタックアルゴリズムをそのままシミュレートし、ノードを逐次生成して木を組み上げる。
+    init_data: A型式(RPN)トークン列（例: 2 3 + 8 1 - *）
     """
-    # データサイズ n に応じて式の複雑さを変える
-    # DataSizeList = [8, 12, 16, 20, 24, 32, ...]
-    # level: n=8→0, n=12→1, n=16→2, n=20→3, n=24→4, n=32+→5
-    PRESETS = [
-        # (RPNトークン列,                                          表示式,                            トークン数)
-        (["2", "3", "+"],
-         "2 + 3",                                                                    3),  # level 0
-        (["4", "2", "-", "3", "*"],
-         "(4-2) × 3",                                                                5),  # level 1
-        (["2", "3", "+", "8", "1", "-", "*"],
-         "(2+3) × (8-1)",                                                            7),  # level 2
-        (["5", "1", "-", "4", "2", "+", "*", "3", "/"],
-         "((5-1) × (4+2)) ÷ 3",                                                     9),  # level 3
-        (["3", "2", "+", "8", "1", "-", "*", "4", "3", "*", "-"],
-         "(3+2) × (8-1) - 4×3",                                                    11),  # level 4
-        (["5", "3", "+", "7", "2", "-", "*", "4", "1", "+", "2", "*", "-"],
-         "(5+3) × (7-2) - (4+1) × 2",                                             13),  # level 5
-    ]
-    level = max(0, min((int(n) - 8) // 4, len(PRESETS) - 1))
-    tokens, expr_str, _ = PRESETS[level]
     OPERATORS = set("+-*/")
+
+    # ── init_data からユーザー指定の RPN を読み込む ────────────────────
+    init_data = kwargs.get("init_data")
+    user_tokens = None
+    if init_data:
+        raw = [str(x).strip() for x in init_data if str(x).strip()]
+        # バリデーション: 各トークンは整数 or 演算子のみ
+        valid = True
+        for t in raw:
+            if t not in OPERATORS:
+                try:
+                    int(t)
+                except ValueError:
+                    valid = False; break
+        # スタックシミュレーションで RPN として正しいか確認
+        if valid and raw:
+            d = 0
+            for t in raw:
+                d = d - 1 if t in OPERATORS else d + 1
+                if d <= 0:
+                    valid = False; break
+            if d != 1:
+                valid = False
+        if valid and raw:
+            user_tokens = raw
+
+    if user_tokens:
+        tokens   = user_tokens
+        expr_str = " ".join(tokens)   # 表示用はそのまま RPN を表示
+    else:
+        # データサイズ n に応じてプリセットを選ぶ
+        PRESETS = [
+            (["2", "3", "+"],
+             "2 + 3"),                                                          # level 0
+            (["4", "2", "-", "3", "*"],
+             "(4-2) × 3"),                                                      # level 1
+            (["2", "3", "+", "8", "1", "-", "*"],
+             "(2+3) × (8-1)"),                                                  # level 2
+            (["5", "1", "-", "4", "2", "+", "*", "3", "/"],
+             "((5-1) × (4+2)) ÷ 3"),                                           # level 3
+            (["3", "2", "+", "8", "1", "-", "*", "4", "3", "*", "-"],
+             "(3+2) × (8-1) - 4×3"),                                           # level 4
+            (["5", "3", "+", "7", "2", "-", "*", "4", "1", "+", "2", "*", "-"],
+             "(5+3) × (7-2) - (4+1) × 2"),                                    # level 5
+        ]
+        level = max(0, min((int(n) - 8) // 4, len(PRESETS) - 1))
+        tokens, expr_str = PRESETS[level]
 
     base = [
         {"message": f"演算木の構築: {expr_str}", "color": "white"},
@@ -3850,7 +3878,9 @@ AlgorithmList = [
     # ── Ch.7: 二分探索木 / 二分木走査 / 演算木 ──
     ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc"}),
     ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc", "traversal_select": True}),
-    ("演算木の構築  (Ch.7)",         expression_tree,   {"type": "misc"}),
+    ("演算木の構築  (Ch.7)",         expression_tree,
+     {"type": "misc", "init_data": True, "init_data_type": "expr",
+      "init_data_hint": "例: 2 3 + 8 1 - *"}),
     # ── Ch.8: 赤黒木・B木 ──
     ("赤黒木 挿入  (Ch.8)",         rb_tree_insert,     {"type": "misc"}),
     ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc"}),
