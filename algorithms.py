@@ -3811,7 +3811,7 @@ AlgorithmList = [
       "init_data_hint": "例: (2+3)*(8-1)"}),
     ("B型式 直接計算  (Ch.5)",      rpn_direct_b,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
-      "init_data_hint": "例: ((2)+(3))*((8)-(1))"}),
+      "init_data_hint": "例: (2+3)*(8-1)"}),
     # ── Ch.6: ソート+二分探索 / 逐次探索 ──
     ("ソート+二分探索  (Ch.6)", sample6_1_binary,
      {"type": "misc", "sort_method": True,
