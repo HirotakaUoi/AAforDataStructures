@@ -1573,20 +1573,28 @@ def _bst_delete(tree, key):
 
 def bst_operations(n, **kwargs):
     """Ch.7: 二分探索木 (BST) の挿入・探索・削除"""
-    N   = max(5, min(int(n), 24))
+    # 初期木: 高さ3のランダム形状 (N=4〜6: 4以上で高さ3が確定、7だと完全二分木固定になるため6まで)
+    N   = max(4, min(int(n), 6))
     rng = random.Random(kwargs.get("seed", N))
-    vals = rng.sample(range(1, 200), N)
-
-    base = [{"message": f"二分探索木 (BST)  N={N}  (Ch.7)", "color": "white"}]
+    init_vals = _bst_insertion_order(rng, N, max_depth=3)
 
     tree = None
+    for v in init_vals:
+        tree = _bst_insert(tree, v)
 
-    # ── 初期フレーム (空の BST) ────────────────────────────────────
-    yield _f([_bst_obj("bst", None, label="BST (空)")],
-             base + [{"message": f"BST 初期化 (空)  N={N} 個を挿入します", "color": "lightgreen"}])
+    # 挿入値は初期木と重複しないよう別途ランダム生成
+    ins_vals = rng.sample([x for x in range(1, 200) if x not in set(init_vals)], 3)
+    keys = init_vals + ins_vals
+
+    base = [{"message": f"二分探索木 (BST)  初期木 N={N} (高さ3)  (Ch.7)", "color": "white"}]
+
+    # ── 初期フレーム (初期木を表示) ────────────────────────────────
+    yield _f([_bst_obj("bst", tree, label="BST")],
+             base + [{"message": f"初期木 (高さ3)  挿入値: {', '.join(map(str, ins_vals))}",
+                      "color": "lightgreen"}])
 
     # ── 挿入フェーズ ─────────────────────────────────────────────────
-    for v in vals:
+    for v in ins_vals:
         # 挿入パスを可視化
         path = _bst_search_path(tree, v) if tree else []
         if path:
@@ -1598,11 +1606,11 @@ def bst_operations(n, **kwargs):
                  base + [{"message": f"insert({v}) 完了", "color": "lightgreen"}])
 
     yield _f([_bst_obj("bst", tree, label="BST")],
-             base + [{"message": f"挿入完了  N={N}  ノード数={N}", "color": "white"}])
+             base + [{"message": f"挿入完了  ノード数={len(keys)}", "color": "white"}])
 
     # ── 探索フェーズ ─────────────────────────────────────────────────
-    not_in = next(x for x in range(1, 200) if x not in set(vals))
-    search_targets = [vals[N // 3], vals[2 * N // 3], not_in]
+    not_in = next(x for x in range(1, 200) if x not in set(keys))
+    search_targets = [init_vals[N // 3], ins_vals[1], not_in]
     for target in search_targets:
         path = _bst_search_path(tree, target)
         found = (path and path[-1] == target)
@@ -1616,7 +1624,7 @@ def bst_operations(n, **kwargs):
                      base + [{"message": f"search({target}): Not Found", "color": "#ff6655"}])
 
     # ── 削除フェーズ ─────────────────────────────────────────────────
-    delete_targets = [vals[1], vals[N // 2]]
+    delete_targets = [ins_vals[0], init_vals[N // 2]]
     for target in delete_targets:
         path = _bst_search_path(tree, target)
         if path and path[-1] == target:
@@ -1962,11 +1970,26 @@ def avl_tree_operations(n, **kwargs):
     import random
     seed = kwargs.get('seed', 42)
     rng  = random.Random(seed)
-    N    = max(5, min(int(n), 20))
-    vals = rng.sample(range(1, 200), N)
-
-    base = [{"message": f"AVL木 (AVL Tree)  N={N}  (Ch.8)", "color": "white"}]
+    # 初期木: AVL は自己平衡するため N=4〜6 なら高さがちょうど3になる
+    # （高さ4には最低7ノード必要）
+    N    = max(4, min(int(n), 6))
+    init_vals = rng.sample(range(1, 200), N)
     avl  = _AVLTree()
+    for v in init_vals:
+        avl.insert(v)         # 初期木はアニメーションなしで構築
+
+    # 挿入値は別途ランダム生成: 回転が最低1回起こる組を選ぶ（シード決定的、最大50回リトライ）
+    pool = [x for x in range(1, 200) if x not in set(init_vals)]
+    for _ in range(50):
+        ins_vals = rng.sample(pool, 3)
+        probe = _AVLTree()
+        for v in init_vals:
+            probe.insert(v)
+        if any(bool(probe.insert(v)) for v in ins_vals):
+            break
+    keys = init_vals + ins_vals
+
+    base = [{"message": f"AVL木 (AVL Tree)  初期木 N={N} (高さ3)  (Ch.8)", "color": "white"}]
 
     def snap(hl=None, msg="", color="white", finished=False):
         return _f([_avl_obj_from_dict("avl",
@@ -1980,11 +2003,12 @@ def avl_tree_operations(n, **kwargs):
                                       rotation=rotation)],
                   base + [{"message": msg, "color": color}])
 
-    # ── 初期フレーム ────────────────────────────────────────────────
-    yield snap(msg=f"AVL木初期化 (空)  {N}個を挿入します", color="lightgreen")
+    # ── 初期フレーム (初期木を表示) ────────────────────────────────
+    yield snap(msg=f"初期木 (高さ3)  挿入値: {', '.join(map(str, ins_vals))}",
+               color="lightgreen")
 
     # ── 挿入フェーズ ────────────────────────────────────────────────
-    for v in vals:
+    for v in ins_vals:
         path = avl.search(v)
         if path:
             yield snap(hl={k: "yellow" for k in path},
@@ -2013,11 +2037,11 @@ def avl_tree_operations(n, **kwargs):
                        msg=f"insert({v}) 完了  回転あり  高さ={h}", color="lightgreen")
 
     h = avl.root.height if avl.root else 0
-    yield snap(msg=f"挿入完了  N={N}  木の高さ={h}", color="white")
+    yield snap(msg=f"挿入完了  ノード数={len(keys)}  木の高さ={h}", color="white")
 
     # ── 探索フェーズ ────────────────────────────────────────────────
-    not_in = next(x for x in range(1, 200) if x not in set(vals))
-    search_targets = [vals[N // 3], vals[2 * N // 3], not_in]
+    not_in = next(x for x in range(1, 200) if x not in set(keys))
+    search_targets = [init_vals[N // 3], ins_vals[1], not_in]
     for target in search_targets:
         path = avl.search(target)
         found = path and path[-1] == target
@@ -2031,7 +2055,7 @@ def avl_tree_operations(n, **kwargs):
             yield snap(msg=f"search({target}): Not Found", color="#ff6655")
 
     # ── 削除フェーズ ────────────────────────────────────────────────
-    delete_targets = [vals[1], vals[N // 2]]
+    delete_targets = [ins_vals[0], init_vals[N // 2]]
     for target in delete_targets:
         path = avl.search(target)
         if path and path[-1] == target:
@@ -2776,6 +2800,25 @@ def _make_random_btree(vals, rng, max_depth=4):
                 nd[side] = mk(v)
                 break
     return root
+
+
+def _bst_insertion_order(rng, N, max_depth=3):
+    """高さ max_depth 以下のランダム形状 BST を作る挿入値列を生成。
+    形状を先に決め、ソート済み値を中順で割り当て、
+    親が必ず子より先に来るランダム順で返す（この順で挿入すると同じ形が再現される）。"""
+    shape = _make_random_btree(list(range(N)), rng, max_depth=max_depth)
+    it = iter(sorted(rng.sample(range(1, 200), N)))
+    def assign(nd):
+        if nd is None:
+            return
+        assign(nd["left"]); nd["key"] = next(it); assign(nd["right"])
+    assign(shape)
+    order, frontier = [], [shape]
+    while frontier:
+        nd = frontier.pop(rng.randrange(len(frontier)))
+        order.append(nd["key"])
+        frontier += [c for c in (nd["left"], nd["right"]) if c]
+    return order
 
 
 def _clone_bt(node, visited_keys=None, active_key=None, visit_order_map=None):
@@ -3901,14 +3944,14 @@ AlgorithmList = [
     ("最適クイックソート・スタック版 OptimalQSS  (Ch.6)", optimal_qss,      {"type": "misc"}),
     ("最適クイックソート・キュー版 OptimalQSQ  (Ch.6)",   optimal_qsq,      {"type": "misc"}),
     # ── Ch.7: 二分探索木 / 二分木走査 / 演算木 ──
-    ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc"}),
-    ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc", "traversal_select": True}),
+    ("BST 挿入・探索・削除  (Ch.7)", bst_operations,    {"type": "misc", "tree_regen": True}),
+    ("二分木の走査 BFS/DFS  (Ch.7)", btree_traversals,  {"type": "misc", "traversal_select": True, "tree_regen": True}),
     ("演算木の構築  (Ch.7)",         expression_tree,
      {"type": "misc", "init_data": True, "init_data_type": "expr",
       "init_data_hint": "例: 2 3 + 8 1 - *"}),
     # ── Ch.8: 赤黒木・B木 ──
     ("赤黒木 挿入  (Ch.8)",         rb_tree_insert,     {"type": "misc"}),
-    ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc"}),
+    ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc", "tree_regen": True}),
     ("B木 挿入  (Ch.8)",            bt_operations,      {"type": "misc"}),
     # ── Ch.11: グラフ ──
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),

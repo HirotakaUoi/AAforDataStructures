@@ -250,7 +250,7 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v36** |
+| `static/js/app.js` | **v38** |
 | `static/js/array_canvas.js` | **v48** |
 | `static/js/ws_client.js` | v1 |
 | `static/css/style.css` | **v6** |
@@ -261,6 +261,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-06-12 | BST/AVL: 初期木（高さ3, N=4〜6）を最初から表示し、挿入値3個は別途ランダム生成して挿入アニメーション。「🌳 初期木生成」ボタン（旧 二分木生成）を速度設定の隣に移動、`tree_regen` メタフラグで BST/AVL/走査の3本に適用 — リセットでは同じ木を維持、ボタンでのみ再生成 (app.js v36→v38) |
 | 2026-06-12 | 二分木の走査: ランダム形状の二分木生成 (`_make_random_btree`, 高さ4固定・N=8〜12) + 「🌳 二分木生成」ボタンを走査セレクト隣に追加 — リセット・走査種別変更では同じ木を維持し、ボタン押下時のみシード再生成 (app.js v35→v36) |
 | 2026-05-26 | RPN 変換・評価: 変換後 A型式(RPN)を B型式の下に配置 / Opr→"Opr"・演算子スタック→"Oprs" ラベル付き 2×2 グリッド表示 (array_canvas.js v43→v44, col 型対応追加) |
 | 2026-05-26 | RPN/B式パネルの初期状態入力欄を広げる: CSS class方式を廃止し、JS inline style直接設定方式に変更 (app.js v31→v32, style.css v5→v6) |

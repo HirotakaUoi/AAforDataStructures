@@ -81,6 +81,12 @@ function _algoSupportsDepthSel(algoId) {
   return !!(algo?.meta?.depth_select);
 }
 
+/** アルゴリズム ID が木の再生成ボタン (tree_regen) をサポートするか */
+function _algoSupportsTreeRegen(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.tree_regen);
+}
+
 /** アルゴリズム ID が走査種別セレクト (traversal_select) をサポートするか */
 function _algoSupportsTraversalSel(algoId) {
   const algo = algorithms.find(a => a.id === Number(algoId));
@@ -383,6 +389,8 @@ class ArrayPanel {
                  title="大きいほど速い">
           <span class="speed-value">×1.0</span>
         </div>
+        <button class="btn btn-secondary btn-regen-tree"
+                style="display:none;white-space:nowrap;margin-left:8px">🌳 初期木生成</button>
       </div>
 
       <div class="params-row init-data-row" style="display:none">
@@ -414,8 +422,6 @@ class ArrayPanel {
             <option value="all">全走査</option>
           </select>
         </label>
-        <button class="btn btn-secondary btn-regen-tree"
-                style="display:none;white-space:nowrap;margin-right:6px">🌳 二分木生成</button>
         <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:6px"></span>
       </div>
 
@@ -514,6 +520,7 @@ class ArrayPanel {
     // 初期状態行（テキスト入力 or 段数セレクトのいずれかが必要なら表示）
     const algo = algorithms.find(a => a.id === algoId);
     const hasTraversalSel_ = _algoSupportsTraversalSel(algoId);
+    const hasTreeRegen     = _algoSupportsTreeRegen(algoId);
     this.el.querySelector(".init-data-row").style.display =
       (hasInitData || hasDepthSel || hasTraversalSel_) ? "" : "none";
 
@@ -533,6 +540,9 @@ class ArrayPanel {
       this._initData = null;
       this.el.querySelector(".inp-init-data").value = "";
       this.el.querySelector(".init-data-info").textContent = "";
+      // tree_regen のみで行が表示される場合に備えてテキスト入力部分を隠す
+      this.el.querySelector(".lbl-init-data").style.display = "none";
+      this.el.querySelector(".btn-set-init-data").style.display = "none";
     }
     if (hasInitData) {
       // テキスト入力部分を表示・設定
@@ -566,9 +576,9 @@ class ArrayPanel {
       this.el.querySelector(".sel-sort-method").value = "quick";
     }
 
-    // 走査種別セレクト（init-data-row 内）+ 二分木生成ボタン
+    // 走査種別セレクト（init-data-row 内）+ 初期木生成ボタン（速度設定の隣）
     this.el.querySelector(".lbl-traversal-sel").style.display = hasTraversalSel_ ? "" : "none";
-    this.el.querySelector(".btn-regen-tree").style.display    = hasTraversalSel_ ? "" : "none";
+    this.el.querySelector(".btn-regen-tree").style.display    = hasTreeRegen ? "" : "none";
     if (!hasTraversalSel_) {
       this._traversal = "bfs";
       this.el.querySelector(".sel-traversal").value = "bfs";
@@ -654,7 +664,7 @@ class ArrayPanel {
       if (!this.isRunning) this._drawPreview();
     });
 
-    // 二分木生成: 新しいシードで木を再生成（リセットでは木は変わらない）
+    // 初期木生成: 新しいシードで木を再生成（リセットでは木は変わらない）
     q(".btn-regen-tree").addEventListener("click", () => {
       if (!this.isRunning) this._fetchAndDrawPreview(Math.floor(Math.random() * 1e9));
     });
@@ -991,11 +1001,11 @@ class ArrayPanel {
     const algoId    = Number(this.el.querySelector(".sel-algo").value);
     const requestId = ++this._previewRequestId;
 
-    // traversal_select 対応アルゴ（二分木走査）はシードを固定し、
-    // 「🌳 二分木生成」ボタン（forcedSeed 経由）でのみ再生成する
+    // tree_regen 対応アルゴ（二分木走査・BST・AVL木）はシードを固定し、
+    // 「🌳 初期木生成」ボタン（forcedSeed 経由）でのみ再生成する
     if (forcedSeed !== null) {
       this._seed = forcedSeed;
-    } else if (!(_algoSupportsTraversalSel(algoId) && this._seed)) {
+    } else if (!(_algoSupportsTreeRegen(algoId) && this._seed)) {
       this._seed = Math.floor(Math.random() * 1e9);
     }
     try {
