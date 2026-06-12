@@ -414,6 +414,8 @@ class ArrayPanel {
             <option value="all">全走査</option>
           </select>
         </label>
+        <button class="btn btn-secondary btn-regen-tree"
+                style="display:none;white-space:nowrap;margin-right:6px">🌳 二分木生成</button>
         <span class="init-data-info" style="color:#aaa;font-size:0.82em;min-width:0;flex:1;margin-left:6px"></span>
       </div>
 
@@ -564,8 +566,9 @@ class ArrayPanel {
       this.el.querySelector(".sel-sort-method").value = "quick";
     }
 
-    // 走査種別セレクト（init-data-row 内）
+    // 走査種別セレクト（init-data-row 内）+ 二分木生成ボタン
     this.el.querySelector(".lbl-traversal-sel").style.display = hasTraversalSel_ ? "" : "none";
+    this.el.querySelector(".btn-regen-tree").style.display    = hasTraversalSel_ ? "" : "none";
     if (!hasTraversalSel_) {
       this._traversal = "bfs";
       this.el.querySelector(".sel-traversal").value = "bfs";
@@ -649,6 +652,11 @@ class ArrayPanel {
     q(".sel-traversal").addEventListener("change", () => {
       this._traversal = q(".sel-traversal").value;
       if (!this.isRunning) this._drawPreview();
+    });
+
+    // 二分木生成: 新しいシードで木を再生成（リセットでは木は変わらない）
+    q(".btn-regen-tree").addEventListener("click", () => {
+      if (!this.isRunning) this._fetchAndDrawPreview(Math.floor(Math.random() * 1e9));
     });
 
     // 段数セレクト: 変更時に _initData を更新してプレビュー更新
@@ -983,7 +991,13 @@ class ArrayPanel {
     const algoId    = Number(this.el.querySelector(".sel-algo").value);
     const requestId = ++this._previewRequestId;
 
-    this._seed = (forcedSeed !== null) ? forcedSeed : Math.floor(Math.random() * 1e9);
+    // traversal_select 対応アルゴ（二分木走査）はシードを固定し、
+    // 「🌳 二分木生成」ボタン（forcedSeed 経由）でのみ再生成する
+    if (forcedSeed !== null) {
+      this._seed = forcedSeed;
+    } else if (!(_algoSupportsTraversalSel(algoId) && this._seed)) {
+      this._seed = Math.floor(Math.random() * 1e9);
+    }
     try {
       let previewUrl = `/api/preview?algorithm_id=${algoId}&n=${numItems}&seed=${this._seed}`;
       {

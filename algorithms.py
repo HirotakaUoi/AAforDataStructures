@@ -2755,6 +2755,29 @@ def _make_complete_btree(vals):
     return build(0)
 
 
+def _make_random_btree(vals, rng, max_depth=4):
+    """ランダムな形の二分木を構築（深さは max_depth 以下に制限）。
+    len(vals) >= 8 かつ max_depth=4 なら高さはちょうど 4 になる
+    （深さ3まででは最大7ノードしか収容できないため）。"""
+    def mk(v):
+        return {"key": v, "color": "#4472C4", "highlight": None,
+                "dim": False, "left": None, "right": None}
+    root = mk(vals[0])
+    for v in vals[1:]:
+        while True:
+            nd, depth = root, 1
+            while True:
+                side = "left" if rng.random() < 0.5 else "right"
+                if nd[side] is None:
+                    break
+                nd = nd[side]
+                depth += 1
+            if depth < max_depth:        # 新ノードは depth+1 段目に入る
+                nd[side] = mk(v)
+                break
+    return root
+
+
 def _clone_bt(node, visited_keys=None, active_key=None, visit_order_map=None):
     """二分木をディープコピーし、visited_keys を highlight 付きで返す。
     visit_order_map: {key: 訪問順番号} を渡すと各ノードに visit_order フィールドを付与。"""
@@ -2814,14 +2837,16 @@ def _btview_obj(id_, root_dict, label="", weight=3):
 
 def btree_traversals(n, **kwargs):
     """Ch.7: 二分木の BFS / DFS 前順・中順・後順 (Sample7_2)"""
-    N   = max(4, min(int(n), 15))
+    # N を 8〜12 に制限: 8以上で高さ4が保証され、12以下で形のバリエーションが出る
+    # （13以上だと高さ4の全15スロットがほぼ埋まり、毎回同じ形に近づくため）
+    N   = max(8, min(int(n), 12))
     rng = random.Random(kwargs.get("seed", N))
     vals = rng.sample(range(1, 100), N)
-    root = _make_complete_btree(vals)
+    root = _make_random_btree(vals, rng, max_depth=4)
 
     traversal = kwargs.get("traversal", "bfs")
 
-    base = [{"message": f"完全二分木  N={N}", "color": "white"}]
+    base = [{"message": f"二分木  N={N} (高さ4)", "color": "white"}]
 
     # ── 初期フレーム (全ノード未訪問) ──
     yield _f([_btview_obj("tree", _clone_bt(root))], base)
