@@ -1972,21 +1972,17 @@ def avl_tree_operations(n, **kwargs):
     rng  = random.Random(seed)
     # 初期木: AVL は自己平衡するため N=4〜6 なら高さがちょうど3になる
     # （高さ4には最低7ノード必要）
-    N    = max(4, min(int(n), 6))
+    # 初期木: AVL は自己平衡するため N=4〜6 なら高さがちょうど3になる
+    N    = rng.randint(4, 6)
     init_vals = rng.sample(range(1, 200), N)
     avl  = _AVLTree()
     for v in init_vals:
         avl.insert(v)         # 初期木はアニメーションなしで構築
 
-    # 挿入値は別途ランダム生成: 回転が最低1回起こる組を選ぶ（シード決定的、最大50回リトライ）
+    # 挿入回数はデータ数 n に追従（初期木の値とは重複しない別の値を挿入）
+    INS  = max(1, min(int(n), 40))
     pool = [x for x in range(1, 200) if x not in set(init_vals)]
-    for _ in range(50):
-        ins_vals = rng.sample(pool, 3)
-        probe = _AVLTree()
-        for v in init_vals:
-            probe.insert(v)
-        if any(bool(probe.insert(v)) for v in ins_vals):
-            break
+    ins_vals = rng.sample(pool, min(INS, len(pool)))
     keys = init_vals + ins_vals
 
     base = [{"message": f"AVL木 (AVL Tree)  初期木 N={N} (高さ3)  (Ch.8)", "color": "white"}]
@@ -2004,7 +2000,8 @@ def avl_tree_operations(n, **kwargs):
                   base + [{"message": msg, "color": color}])
 
     # ── 初期フレーム (初期木を表示) ────────────────────────────────
-    yield snap(msg=f"初期木 (高さ3)  挿入値: {', '.join(map(str, ins_vals))}",
+    ins_preview = ', '.join(map(str, ins_vals[:12])) + (' …' if len(ins_vals) > 12 else '')
+    yield snap(msg=f"初期木 (高さ3)  挿入予定 {len(ins_vals)} 個: {ins_preview}",
                color="lightgreen")
 
     # ── 挿入フェーズ ────────────────────────────────────────────────
@@ -2039,9 +2036,14 @@ def avl_tree_operations(n, **kwargs):
     h = avl.root.height if avl.root else 0
     yield snap(msg=f"挿入完了  ノード数={len(keys)}  木の高さ={h}", color="white")
 
-    # ── 探索フェーズ ────────────────────────────────────────────────
+    # ── 探索フェーズ (挿入回数の約1/3) ──────────────────────────────
+    SR = max(1, round(len(ins_vals) / 3))
     not_in = next(x for x in range(1, 200) if x not in set(keys))
-    search_targets = [init_vals[N // 3], ins_vals[1], not_in]
+    shuffled = list(keys); rng.shuffle(shuffled)
+    if SR >= 2:
+        search_targets = shuffled[:SR - 1] + [not_in]   # 末尾1個は存在しないキー
+    else:
+        search_targets = shuffled[:1]
     for target in search_targets:
         path = avl.search(target)
         found = path and path[-1] == target
@@ -2054,8 +2056,10 @@ def avl_tree_operations(n, **kwargs):
         if not found:
             yield snap(msg=f"search({target}): Not Found", color="#ff6655")
 
-    # ── 削除フェーズ ────────────────────────────────────────────────
-    delete_targets = [ins_vals[0], init_vals[N // 2]]
+    # ── 削除フェーズ (挿入回数の約1/3) ──────────────────────────────
+    DEL = max(1, round(len(ins_vals) / 3))
+    del_pool = list(keys); rng.shuffle(del_pool)
+    delete_targets = del_pool[:DEL]
     for target in delete_targets:
         path = avl.search(target)
         if path and path[-1] == target:
