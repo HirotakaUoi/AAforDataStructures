@@ -3965,7 +3965,7 @@ AlgorithmList = [
       "init_data_hint": "例: 2 3 + 8 1 - *"}),
     # ── Ch.8: 赤黒木・B木 ──
     ("赤黒木 挿入  (Ch.8)",         rb_tree_insert,     {"type": "misc"}),
-    ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc", "tree_regen": True}),
+    ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc", "tree_regen": True, "rotation_pause": True}),
     ("B木 挿入  (Ch.8)",            bt_operations,      {"type": "misc"}),
     # ── Ch.11: グラフ ──
     ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),

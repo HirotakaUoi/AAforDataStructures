@@ -93,6 +93,12 @@ function _algoSupportsTraversalSel(algoId) {
   return !!(algo?.meta?.traversal_select);
 }
 
+/** アルゴリズム ID が「回転で自動停止」チェックボックス (rotation_pause) をサポートするか */
+function _algoSupportsRotationPause(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.rotation_pause);
+}
+
 /** キー型ごとのハッシュ関数オプション */
 const _KEY_TYPE_FUNCS = {
   int:   [
@@ -389,8 +395,16 @@ class ArrayPanel {
                  title="大きいほど速い">
           <span class="speed-value">×1.0</span>
         </div>
-        <button class="btn btn-secondary btn-regen-tree"
-                style="display:none;white-space:nowrap;margin-left:8px">🌳 初期木生成</button>
+        <div class="tree-ctrl-group"
+             style="display:none;align-items:center;gap:8px;margin-left:8px;white-space:nowrap">
+          <button class="btn btn-secondary btn-regen-tree"
+                  style="display:none;white-space:nowrap">🌳 初期木生成</button>
+          <label class="lbl-rotation-pause"
+                 style="display:none;align-items:center;gap:4px"
+                 title="回転 (LL/RR/LR/RL) が起きるフレームで自動的に一時停止します">
+            <input type="checkbox" class="chk-rotation-pause">回転で自動停止
+          </label>
+        </div>
       </div>
 
       <div class="params-row init-data-row" style="display:none">
@@ -579,6 +593,14 @@ class ArrayPanel {
     // 走査種別セレクト（init-data-row 内）+ 初期木生成ボタン（速度設定の隣）
     this.el.querySelector(".lbl-traversal-sel").style.display = hasTraversalSel_ ? "" : "none";
     this.el.querySelector(".btn-regen-tree").style.display    = hasTreeRegen ? "" : "none";
+
+    // 「回転で自動停止」チェックボックス（初期木生成ボタンの右側）
+    const hasRotationPause = _algoSupportsRotationPause(algoId);
+    this.el.querySelector(".lbl-rotation-pause").style.display =
+      hasRotationPause ? "flex" : "none";
+    // ボタン or チェックボックスのいずれかが必要なら、まとめグループを表示
+    this.el.querySelector(".tree-ctrl-group").style.display =
+      (hasTreeRegen || hasRotationPause) ? "flex" : "none";
     if (!hasTraversalSel_) {
       this._traversal = "bfs";
       this.el.querySelector(".sel-traversal").value = "bfs";
@@ -1160,6 +1182,15 @@ class ArrayPanel {
 
     this.arrayCanvas.draw(frame);
     this.el.querySelector(".status-frames").textContent = `フレーム: ${this._frameCount}`;
+
+    // 「回転で自動停止」: 回転フレーム (objects に rotation を持つ) で一時停止
+    const chk = this.el.querySelector(".chk-rotation-pause");
+    const autoPause = chk && chk.offsetParent !== null && chk.checked;
+    if (autoPause && !frame.finished && !this.isPaused &&
+        Array.isArray(frame.objects) && frame.objects.some(o => o && o.rotation)) {
+      this.togglePause();
+      this._setStatus("回転で自動停止", "#FFD700");
+    }
 
     if (frame.finished) {
       this.isRunning = false;
