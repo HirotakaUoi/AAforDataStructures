@@ -1574,23 +1574,26 @@ def _bst_delete(tree, key):
 def bst_operations(n, **kwargs):
     """Ch.7: 二分探索木 (BST) の挿入・探索・削除"""
     # 初期木: 高さ3のランダム形状 (N=4〜6: 4以上で高さ3が確定、7だと完全二分木固定になるため6まで)
-    N   = max(4, min(int(n), 6))
-    rng = random.Random(kwargs.get("seed", N))
+    rng = random.Random(kwargs.get("seed", 42))
+    N   = rng.randint(4, 6)
     init_vals = _bst_insertion_order(rng, N, max_depth=3)
 
     tree = None
     for v in init_vals:
         tree = _bst_insert(tree, v)
 
-    # 挿入値は初期木と重複しないよう別途ランダム生成
-    ins_vals = rng.sample([x for x in range(1, 200) if x not in set(init_vals)], 3)
+    # 挿入回数はデータ数 n に追従（初期木と重複しない値を挿入）
+    INS  = max(1, min(int(n), 40))
+    pool = [x for x in range(1, 200) if x not in set(init_vals)]
+    ins_vals = rng.sample(pool, min(INS, len(pool)))
     keys = init_vals + ins_vals
 
     base = [{"message": f"二分探索木 (BST)  初期木 N={N} (高さ3)  (Ch.7)", "color": "white"}]
 
     # ── 初期フレーム (初期木を表示) ────────────────────────────────
+    ins_preview = ', '.join(map(str, ins_vals[:12])) + (' …' if len(ins_vals) > 12 else '')
     yield _f([_bst_obj("bst", tree, label="BST")],
-             base + [{"message": f"初期木 (高さ3)  挿入値: {', '.join(map(str, ins_vals))}",
+             base + [{"message": f"初期木 (高さ3)  挿入予定 {len(ins_vals)} 個: {ins_preview}",
                       "color": "lightgreen"}])
 
     # ── 挿入フェーズ ─────────────────────────────────────────────────
@@ -1608,9 +1611,14 @@ def bst_operations(n, **kwargs):
     yield _f([_bst_obj("bst", tree, label="BST")],
              base + [{"message": f"挿入完了  ノード数={len(keys)}", "color": "white"}])
 
-    # ── 探索フェーズ ─────────────────────────────────────────────────
+    # ── 探索フェーズ (挿入回数の約1/3) ──────────────────────────────
+    SR = max(1, round(len(ins_vals) / 3))
     not_in = next(x for x in range(1, 200) if x not in set(keys))
-    search_targets = [init_vals[N // 3], ins_vals[1], not_in]
+    shuffled = list(keys); rng.shuffle(shuffled)
+    if SR >= 2:
+        search_targets = shuffled[:SR - 1] + [not_in]   # 末尾1個は存在しないキー
+    else:
+        search_targets = shuffled[:1]
     for target in search_targets:
         path = _bst_search_path(tree, target)
         found = (path and path[-1] == target)
@@ -1623,8 +1631,10 @@ def bst_operations(n, **kwargs):
             yield _f([_bst_obj("bst", tree, label="BST")],
                      base + [{"message": f"search({target}): Not Found", "color": "#ff6655"}])
 
-    # ── 削除フェーズ ─────────────────────────────────────────────────
-    delete_targets = [ins_vals[0], init_vals[N // 2]]
+    # ── 削除フェーズ (挿入回数の約1/3) ──────────────────────────────
+    DEL = max(1, round(len(ins_vals) / 3))
+    del_pool = list(keys); rng.shuffle(del_pool)
+    delete_targets = del_pool[:DEL]
     for target in delete_targets:
         path = _bst_search_path(tree, target)
         if path and path[-1] == target:
@@ -1867,8 +1877,8 @@ def _rb_obj(id, root, nil, hl_map=None, label="", weight=1):
 
 
 def rb_tree_insert(n, **kwargs):
-    """赤黒木: 挿入とバランス調整を可視化"""
-    N   = max(4, min(int(n), 24))
+    """赤黒木: 挿入とバランス調整を可視化 (挿入回数 = データ数 n)"""
+    N   = max(4, min(int(n), 40))
     rng = random.Random(kwargs.get("seed", N))
     vals = rng.sample(range(1, 200), N)
 
@@ -2695,10 +2705,10 @@ def _bt_split_child(parent, i, t):
 
 
 def bt_operations(n, **kwargs):
-    """Ch.8: B木 (t=2) の挿入を可視化"""
+    """Ch.8: B木 (t=2) の挿入を可視化 (挿入回数 = データ数 n)"""
     t        = 2
     MAX_KEYS = 2 * t - 1
-    N        = max(5, min(int(n), 24))
+    N        = max(5, min(int(n), 40))
     rng      = random.Random(kwargs.get("seed", N))
     vals     = rng.sample(range(1, 200), N)
 
