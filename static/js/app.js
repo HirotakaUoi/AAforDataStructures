@@ -1134,6 +1134,9 @@ class ArrayPanel {
         if (this._ops && this._ops.length > 0) body.ops = this._ops;
         if (_algoSupportsSortMethod(algoId))   body.sort_method = this._sortMethod;
         if (_algoSupportsTraversalSel(algoId)) body.traversal   = this._traversal;
+        if (_algoSupportsRotationPause(algoId)) {
+          body.rotation_pause = !!this.el.querySelector(".chk-rotation-pause")?.checked;
+        }
       }
 
       const res = await fetch("/api/start", {

@@ -52,6 +52,7 @@ class StartParams(BaseModel):
     ops:            Optional[list[str]] = None  # ユーザー指定の操作列 (misc ops 対応アルゴ用)
     sort_method:    Optional[str] = None        # ソート手法: "quick" | "shell" | "insert"
     traversal:      Optional[str] = None        # 走査種別: "bfs" | "preorder" | "inorder" | "postorder" | "all"
+    rotation_pause: bool = False                 # 回転フレームで自動一時停止 (AVL木用)
 
 
 @app.get("/api/preview")
@@ -126,12 +127,13 @@ def start_session(params: StartParams):
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
-        "generator": generator,
-        "speed":     params.speed,
-        "paused":    False,
-        "stopped":   False,
-        "algo_name": algo_name,
-        "num_items": params.num_items,
+        "generator":      generator,
+        "speed":          params.speed,
+        "paused":         False,
+        "stopped":        False,
+        "algo_name":      algo_name,
+        "num_items":      params.num_items,
+        "rotation_pause": params.rotation_pause,
     }
     return {
         "session_id": session_id,
@@ -170,6 +172,12 @@ async def ws_endpoint(ws: WebSocket, session_id: str):
                 if session["stopped"]:
                     break
                 await ws.send_json(frame)
+                # 回転で自動停止: クライアントの pause 往復を待たず、
+                # 送信直後にサーバー側で即座に一時停止する（往復遅延によるフレームずれを防止）
+                if (session.get("rotation_pause") and not frame.get("finished")
+                        and any(isinstance(o, dict) and o.get("rotation")
+                                for o in (frame.get("objects") or []))):
+                    session["paused"] = True
                 await asyncio.sleep(session["speed"])
         except Exception:
             pass
