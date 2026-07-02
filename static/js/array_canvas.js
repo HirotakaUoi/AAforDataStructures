@@ -185,7 +185,10 @@ class ArrayCanvas {
     }
 
     // 完了オーバーレイ
-    if (finished) {
+    // 探索結果 (found) / 計算結果 (result) がある場合のみキャンバス上にバナー表示する。
+    // 単純な「完了!」はデータ構造をdimして隠してしまうため、ここでは描かず
+    // コントロールパネル側のステータス表示 (status-done-badge) に任せる。
+    if (finished && (result !== null || found !== null)) {
       ctx.save();
       ctx.fillStyle = "rgba(0,0,0,.55)";
       ctx.fillRect(0, 0, this.cw, this.ch);
@@ -222,11 +225,6 @@ class ArrayCanvas {
         ctx.font      = `bold ${fs}px sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText("Not Found", this.cw / 2, this.ch / 2 + fs * 0.38);
-      } else {
-        ctx.fillStyle = "#FFD700";
-        ctx.font      = `bold ${fs}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.fillText("完了!", this.cw / 2, this.ch / 2 + fs * 0.35);
       }
       ctx.restore();
     }
@@ -2416,7 +2414,9 @@ class ArrayCanvas {
     const ctx = this.ctx;
     const cw  = this.cw;
 
-    const PAD_T  = label ? 20 : 8;
+    // テキストオーバーレイ(タイトル+ハッシュ関数式+メッセージ = 3行)との重なりを避ける
+    const TEXT_CLEARANCE = 64;
+    const PAD_T  = TEXT_CLEARANCE + (label ? 14 : 4);
     const PAD_B  = 6;
     const PAD_L  = 48;   // index labels
     const PAD_R  = 8;
@@ -2424,15 +2424,14 @@ class ArrayCanvas {
     const availH    = areaH - PAD_T - PAD_B;
     const cellH     = Math.max(14, Math.min(38, availH / m));
     const cellW     = 60;                          // ハッシュキーは短い整数 — 固定幅
-    const CHAIN_ROOM = 160;
-    const startX    = PAD_L + Math.max(0, Math.floor((cw - PAD_L - PAD_R - cellW - CHAIN_ROOM) / 2));
+    const startX    = PAD_L;                        // 左詰め — パネルを広げても表を中央に寄せて余白を作らない
     const chainStart = startX + cellW + 8;
 
     ctx.save();
 
     if (label) {
       ctx.fillStyle = "#6a8faf"; ctx.font = "10px sans-serif";
-      ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + 14);
+      ctx.textAlign = "left"; ctx.fillText(label, 6, areaY + TEXT_CLEARANCE + 8);
     }
 
     for (let i = 0; i < m; i++) {

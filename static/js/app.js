@@ -493,6 +493,7 @@ class ArrayPanel {
         <span class="status-algo">-</span>
         <span class="status-state">待機中</span>
         <span class="status-frames">フレーム: 0</span>
+        <span class="status-done-badge"></span>
       </div>
       <div class="resize-handle" title="リサイズ"></div>
     `;
@@ -1168,6 +1169,7 @@ class ArrayPanel {
     this._setBtns({ start: false, pause: true, stop: true, reset: false });
     this.el.querySelector(".status-algo").textContent   = info.algo_name;
     this.el.querySelector(".text-overlay").textContent  = "";
+    this.el.querySelector(".status-done-badge").textContent = "";
 
     this.client = new AnimationClient(
       this.sessionId,
@@ -1201,6 +1203,9 @@ class ArrayPanel {
       this.el.classList.add("finished");
       this._setStatus("完了", "#44aa44");
       this._setBtns({ start: false, pause: false, stop: false, reset: true });
+      // 「完了!」はキャンバス上のデータ構造をdimして隠さないよう、
+      // コントロールパネルの空きエリア（ステータスバー右側）に表示する
+      this.el.querySelector(".status-done-badge").textContent = "🎉 完了!";
     }
   }
 
@@ -1247,6 +1252,7 @@ class ArrayPanel {
     if (this.isRunning) this.stop();
     this.el.querySelector(".text-overlay").textContent  = "（開始ボタンを押してください）";
     this.el.querySelector(".status-frames").textContent = "フレーム: 0";
+    this.el.querySelector(".status-done-badge").textContent = "";
     this.el.classList.remove("finished");
     this._setStatus("待機中", "#888");
     this._setBtns({ start: true, pause: false, stop: false, reset: false });

@@ -319,6 +319,12 @@ header h1 {
 }
 .status-bar .status-algo  { color: #e2b96f; font-weight: bold; }
 .status-bar .status-state { color: #90caf9; }
+.status-bar .status-done-badge {
+  margin-left: auto;
+  font-size: .85rem;
+  font-weight: bold;
+  color: #FFD700;
+}
 
 /* ===== レスポンシブ ===== */
 @media (max-width: 560px) {

@@ -2467,15 +2467,16 @@ def hash_open_addressing(n, **kwargs):
             x += 1
         return x
 
-    N   = max(5, min(int(n), 24))
+    N   = max(5, min(int(n), 40))
     rng = random.Random(kwargs.get("seed", N))
 
     # ── init_data 解析 ───────────────────────────────────────────
+    # (m 未指定時のデフォルトは N より十分大きい素数を自動選択。
+    #  m を明示指定した場合はユーザーの指定を尊重する — N ≥ m だと
+    #  テーブルが満杯になり得るが、それも開番地法の挙動として許容する)
     _idata  = kwargs.get("init_data") or []
     _def_m  = _next_prime(max(11, int(N * 1.6)))
     M, key_type, fn_raw, fn_key = _parse_hash_init_data(_idata, _def_m)
-    if M <= N:   # 開番地法: N より十分大きい素数であること
-        M = _next_prime(max(11, int(N * 1.6)))
 
     # ── ハッシュ関数 ─────────────────────────────────────────────
     h, func_label = _make_hash_fn(key_type, fn_key, fn_raw, M)
@@ -2507,6 +2508,15 @@ def hash_open_addressing(n, **kwargs):
                               color="orange")
             probe = (probe + 1) % M
             steps += 1
+
+        if table[probe] is not None:
+            # 全スロットが埋まっている — 空きが見つからず挿入不可 (既存要素を上書きしない)
+            # このままでは以降の挿入も全て失敗するため、ここでアニメーションを停止する
+            slots_tmp = [_hash_slot(table[i]) for i in range(M)]
+            yield _hash_frame(slots_tmp, M, -1, base,
+                              f"insert({kr}): h({kr})={idx}  → テーブル満杯 (空きスロットなし)  挿入不可・停止",
+                              color="#ff6655", finished=True)
+            return
 
         table[probe] = v
         slots = [_hash_slot(table[i]) for i in range(M)]
@@ -2572,7 +2582,7 @@ def hash_chaining(n, **kwargs):
             x += 1
         return x
 
-    N   = max(5, min(int(n), 24))
+    N   = max(5, min(int(n), 40))
     rng = random.Random(kwargs.get("seed", N))
 
     # ── init_data 解析 ───────────────────────────────────────────
