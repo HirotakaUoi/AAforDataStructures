@@ -184,50 +184,10 @@ class ArrayCanvas {
       ctx.restore();
     }
 
-    // 完了オーバーレイ
-    // 探索結果 (found) / 計算結果 (result) がある場合のみキャンバス上にバナー表示する。
-    // 単純な「完了!」はデータ構造をdimして隠してしまうため、ここでは描かず
-    // コントロールパネル側のステータス表示 (status-done-badge) に任せる。
-    if (finished && (result !== null || found !== null)) {
-      ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,.55)";
-      ctx.fillRect(0, 0, this.cw, this.ch);
-      const fs = Math.min(36, this.cw / 8);
-      if (result !== null) {
-        // result フィールドがある場合: 計算結果またはエラーを表示
-        const isError = typeof result === "string" && result.startsWith("エラー");
-        const bgColor  = isError ? "rgba(90,0,0,.80)"  : "rgba(0,70,0,.80)";
-        const txtColor = isError ? "#ff9999"            : "#88ffbb";
-        ctx.fillStyle = bgColor;
-        const boxH = fs * 2.6;
-        ctx.fillRect(0, this.ch / 2 - boxH / 2, this.cw, boxH);
-        // テキストサイズをキャンバス幅に合わせて自動縮小
-        let rfs = Math.min(fs * 1.1, this.cw / 10);
-        ctx.font = `bold ${rfs}px monospace`;
-        while (ctx.measureText(String(result)).width > this.cw - 16 && rfs > 10) {
-          rfs -= 1;
-          ctx.font = `bold ${rfs}px monospace`;
-        }
-        ctx.fillStyle = txtColor;
-        ctx.textAlign = "center";
-        ctx.fillText(String(result), this.cw / 2, this.ch / 2 + rfs * 0.38);
-      } else if (found === true) {
-        ctx.fillStyle = "rgba(0,80,0,.75)";
-        ctx.fillRect(0, this.ch / 2 - fs * 1.2, this.cw, fs * 2.4);
-        ctx.fillStyle = "#44ff88";
-        ctx.font      = `bold ${fs}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.fillText("Found !", this.cw / 2, this.ch / 2 + fs * 0.38);
-      } else if (found === false) {
-        ctx.fillStyle = "rgba(80,0,0,.75)";
-        ctx.fillRect(0, this.ch / 2 - fs * 1.2, this.cw, fs * 2.4);
-        ctx.fillStyle = "#ff6666";
-        ctx.font      = `bold ${fs}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.fillText("Not Found", this.cw / 2, this.ch / 2 + fs * 0.38);
-      }
-      ctx.restore();
-    }
+    // 完了時の表示について:
+    // 「完了!」も探索結果(found)・計算結果(result)も、キャンバス上のデータ構造を
+    // dimして隠してしまわないよう、ここでは一切描かない。
+    // 全てコントロールパネル側のステータス表示 (status-done-badge) に任せる。
   }
 
   // ════════════════════════════════════════════════════════════════════

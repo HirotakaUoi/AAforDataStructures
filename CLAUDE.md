@@ -250,10 +250,10 @@ AAforDataStructures/
 
 | ファイル | バージョン |
 |---|---|
-| `static/js/app.js` | **v44** |
-| `static/js/array_canvas.js` | **v53** |
+| `static/js/app.js` | **v45** |
+| `static/js/array_canvas.js` | **v54** |
 | `static/js/ws_client.js` | v1 |
-| `static/css/style.css` | **v8** |
+| `static/css/style.css` | **v9** |
 
 ---
 
@@ -261,6 +261,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-07-03 (3) | 全アルゴリズム共通: 完了時の全画面dimが探索結果(Found!/Not Found)・計算結果(result)バナーにまだ残っていたのを修正（生データ構造が隠れて確認できない問題）。キャンバス上には一切描かず、ステータスバーの `status-done-badge` に「✅ Found !」「❌ Not Found」「✅ 結果 = …」「🎉 完了!」を固定背景色バッジ（テーマが変わっても視認性が落ちない）で表示するよう統一。表示時に短いフラッシュアニメーション(1.4秒)を付与し「一時的に目立たせてからステータス表示に落ち着く」動きに。副次的に、テーマ切替時に実行中でないパネル（完了後含む）が最終フレームでなくプレビューに巻き戻るバグも発見・修正（`_applyTheme` の再描画条件から `isRunning` 判定を除去） (array_canvas.js v53→v54, app.js v44→v45, style.css v8→v9) |
 | 2026-07-03 (2) | DFS/BFS: 「目的ノードを入力→開始」のように `.inp-target` が blur した際の change イベントで意図せずグラフが再抽選され、プレビューと実際に開始されるアニメーションが食い違うバグを修正。`tree_regen` と同様のシード固定ロジックを `target_node` 対応アルゴリズムにも適用 (app.js v43→v44) |
 | 2026-07-03 (1) | DFS/BFS: グラフのランダム生成を連結成分ごとにレイアウト計算しグリッド状に敷き詰める方式に変更 — 非連結グラフで成分間に反発力だけが働き不必要な空白ができていた問題を修正（`_fr_layout()` ヘルパーに切り出し） |
 | 2026-07-02 (8) | DFS/BFS 目的ノード欄: `<input type=number>` の上下スピナーを非表示化（直接入力のみ）。`_validateTargetNode()` を追加し、範囲外・非整数入力時はリアルタイムで赤字エラー表示、「開始」もブロックするよう変更 (app.js v42→v43, style.css v7→v8) |

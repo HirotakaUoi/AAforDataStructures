@@ -174,7 +174,10 @@ function _applyTheme(key) {
   document.querySelectorAll(".panel").forEach(el => {
     const panel = el._panel;
     if (!panel) return;
-    if (panel.isRunning && panel.arrayCanvas && panel._lastFrame) {
+    if (panel.arrayCanvas && panel._lastFrame) {
+      // 実行中・完了後にかかわらず、直近のフレーム（完了時の最終状態を含む）を
+      // 保持したままテーマだけ切り替える。ここで preview に戻すと、
+      // 完了後の最終状態がテーマ切替のたびに見えなくなってしまう。
       panel.arrayCanvas.canvas = panel.el.querySelector(".array-canvas");
       panel.arrayCanvas.ctx = panel.arrayCanvas.canvas.getContext("2d");
       panel.arrayCanvas.draw(panel._lastFrame);
@@ -1241,7 +1244,7 @@ class ArrayPanel {
     this._setBtns({ start: false, pause: true, stop: true, reset: false });
     this.el.querySelector(".status-algo").textContent   = info.algo_name;
     this.el.querySelector(".text-overlay").textContent  = "";
-    this.el.querySelector(".status-done-badge").textContent = "";
+    this._clearDoneBadge();
 
     this.client = new AnimationClient(
       this.sessionId,
@@ -1275,10 +1278,39 @@ class ArrayPanel {
       this.el.classList.add("finished");
       this._setStatus("完了", "#44aa44");
       this._setBtns({ start: false, pause: false, stop: false, reset: true });
-      // 「完了!」はキャンバス上のデータ構造をdimして隠さないよう、
-      // コントロールパネルの空きエリア（ステータスバー右側）に表示する
-      this.el.querySelector(".status-done-badge").textContent = "🎉 完了!";
+      // 探索結果(found)・計算結果(result)・単純完了のいずれも、
+      // キャンバス上のデータ構造をdim/隠さず、ステータスバーのバッジにのみ表示する。
+      // バッジは固定の背景色を持つため、カラーテーマが変わっても視認性が落ちない。
+      this._showDoneBadge(frame);
     }
+  }
+
+  _showDoneBadge(frame) {
+    const badge = this.el.querySelector(".status-done-badge");
+    badge.classList.remove("badge-found", "badge-notfound", "badge-error", "badge-result", "flash");
+    if (frame.result !== null && frame.result !== undefined) {
+      const isError = typeof frame.result === "string" && frame.result.startsWith("エラー");
+      badge.textContent = isError ? `❌ ${frame.result}` : `✅ 結果 = ${frame.result}`;
+      badge.classList.add(isError ? "badge-error" : "badge-result");
+    } else if (frame.found === true) {
+      badge.textContent = "✅ Found !";
+      badge.classList.add("badge-found");
+    } else if (frame.found === false) {
+      badge.textContent = "❌ Not Found";
+      badge.classList.add("badge-notfound");
+    } else {
+      badge.textContent = "🎉 完了!";
+    }
+    badge.classList.add("visible");
+    // 一時的に目立たせてから、常設のステータス表示に落ち着かせる
+    void badge.offsetWidth; // reflow でアニメーションを再トリガー
+    badge.classList.add("flash");
+  }
+
+  _clearDoneBadge() {
+    const badge = this.el.querySelector(".status-done-badge");
+    badge.textContent = "";
+    badge.classList.remove("visible", "badge-found", "badge-notfound", "badge-error", "badge-result", "flash");
   }
 
   // ── WebSocket クローズ ────────────────────────────────────────
@@ -1324,7 +1356,7 @@ class ArrayPanel {
     if (this.isRunning) this.stop();
     this.el.querySelector(".text-overlay").textContent  = "（開始ボタンを押してください）";
     this.el.querySelector(".status-frames").textContent = "フレーム: 0";
-    this.el.querySelector(".status-done-badge").textContent = "";
+    this._clearDoneBadge();
     this.el.classList.remove("finished");
     this._setStatus("待機中", "#888");
     this._setBtns({ start: true, pause: false, stop: false, reset: false });
