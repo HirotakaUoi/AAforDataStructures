@@ -1077,11 +1077,15 @@ class ArrayPanel {
     const algoId    = Number(this.el.querySelector(".sel-algo").value);
     const requestId = ++this._previewRequestId;
 
-    // tree_regen 対応アルゴ（二分木走査・BST・AVL木）はシードを固定し、
-    // 「🌳 初期木生成」ボタン（forcedSeed 経由）でのみ再生成する
+    // tree_regen 対応アルゴ（二分木走査・BST・AVL木）/ target_node 対応アルゴ（DFS/BFS）は
+    // シードを固定し、明示的な forcedSeed 指定時のみ再生成する。
+    // これが無いと「目的ノードを入力→開始」のように .inp-target が blur した際の
+    // change イベントで意図せず別のグラフに再抽選されてしまい、
+    // プレビュー表示と実際に開始されるアニメーションが食い違うバグになる。
+    const keepSeed = (_algoSupportsTreeRegen(algoId) || _algoSupportsTargetNode(algoId)) && this._seed;
     if (forcedSeed !== null) {
       this._seed = forcedSeed;
-    } else if (!(_algoSupportsTreeRegen(algoId) && this._seed)) {
+    } else if (!keepSeed) {
       this._seed = Math.floor(Math.random() * 1e9);
     }
     try {
