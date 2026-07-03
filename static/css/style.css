@@ -224,6 +224,16 @@ header h1 {
 }
 .params-row select:focus { outline: 1px solid #e94560; }
 
+/* target / 目的ノード入力: 上下スピナーを非表示にし、直接入力のみ受け付ける */
+.inp-target::-webkit-outer-spin-button,
+.inp-target::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.inp-target { -moz-appearance: textfield; }
+.target-info.error { color: #ff6666; }
+.target-info.ok    { color: #6ec96e; }
+
 /* 式入力 (RPN/B式) 用: 行の折り返しを抑止（残りは JS で inline style を直接設定） */
 .params-row.expr-wide { flex-wrap: nowrap; }
 .params-row.expr-wide .init-data-info { flex: 0 0 auto; }

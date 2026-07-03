@@ -2332,12 +2332,22 @@ class ArrayCanvas {
     const px = (xr) => chartL + xr * chartW;
     const py = (yr) => chartT + yr * chartH;
 
-    const nodeR = Math.max(14, Math.min(24, Math.min(chartW, chartH) / (nodes.length * 0.9 + 2)));
-    const fs    = Math.max(8, Math.min(13, nodeR * 0.65));
-
     // Build position map
     const pos = {};
     for (const n of nodes) pos[n.id] = { x: px(n.x), y: py(n.y) };
+
+    // ノード半径は実際の最短ノード間距離から決める（重なりを防ぐ）
+    let minDist = Infinity;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const p1 = pos[nodes[i].id], p2 = pos[nodes[j].id];
+        const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+        if (d < minDist) minDist = d;
+      }
+    }
+    const fitR = Number.isFinite(minDist) ? (minDist / 2 - 2) : 24;
+    const nodeR = Math.max(6, Math.min(24, fitR));
+    const fs    = Math.max(7, Math.min(13, nodeR * 0.65));
 
     ctx.save();
 
@@ -2346,13 +2356,12 @@ class ArrayCanvas {
       ctx.textAlign = "left"; ctx.fillText(label, PAD, areaY + 14);
     }
 
-    // Draw edges first
-    for (const e of edges) {
+    // Draw edges first (通常/探索経路の辺 → 発見した経路の辺の順、経路は最後に上書きして最も目立たせる)
+    const drawEdge = (e, col, lw) => {
       const p1 = pos[e.from], p2 = pos[e.to];
-      if (!p1 || !p2) continue;
-      const col = e.highlight ? "#ffcc44" : _acTheme().edgeColor;
+      if (!p1 || !p2) return;
       ctx.strokeStyle = col;
-      ctx.lineWidth   = e.highlight ? 2.5 : 1.2;
+      ctx.lineWidth   = lw;
       if (e.directed || directed) {
         // Shorten line to node boundary
         const dx = p2.x - p1.x, dy = p2.y - p1.y;
@@ -2365,6 +2374,18 @@ class ArrayCanvas {
       } else {
         ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
       }
+    };
+    for (const e of edges) {
+      if (e.path) continue;   // 経路の辺は後で最前面に描く
+      drawEdge(e, e.highlight ? "#ffcc44" : _acTheme().edgeColor, e.highlight ? 2.5 : 1.2);
+    }
+    for (const e of edges) {
+      if (!e.path) continue;
+      drawEdge(e, "#44ff88", 3.5);
+    }
+    for (const e of edges) {
+      const p1 = pos[e.from], p2 = pos[e.to];
+      if (!p1 || !p2) continue;
       // Edge weight label
       if (e.weight !== undefined) {
         const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;

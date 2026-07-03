@@ -2096,50 +2096,26 @@ def avl_tree_operations(n, **kwargs):
 # Ch.11: グラフ – DFS / BFS (type: "misc")
 # ===========================================================================
 
-def _make_random_graph(n, seed=None):
-    """N ノードのランダム連結無向グラフを生成 (フォースダイレクテッドレイアウト)"""
+def _fr_layout(sub_n, sub_edges, rng):
+    """sub_n 個のノード (ローカル添字 0..sub_n-1)・sub_edges から
+    Fruchterman-Reingold フォースダイレクテッドレイアウトで
+    正規化座標 [0,1]×[0,1] のリストを計算して返す"""
     import math
-    from random import Random
-    rng = Random(seed)
+    if sub_n == 0:
+        return []
+    if sub_n == 1:
+        return [[0.5, 0.5]]
 
-    # スパニングツリーで連結性を保証
-    perm = list(range(1, n))
-    rng.shuffle(perm)
-    in_tree = [0]
-    edges   = set()
-    adj     = {i: [] for i in range(n)}
-
-    for v in perm:
-        u = rng.choice(in_tree)
-        e = tuple(sorted([u, v]))
-        edges.add(e)
-        adj[u].append(v)
-        adj[v].append(u)
-        in_tree.append(v)
-
-    # 追加辺 (n//3 本)
-    for _ in range(n // 3):
-        for _ in range(30):
-            u = rng.randint(0, n - 1)
-            v = rng.randint(0, n - 1)
-            e = tuple(sorted([u, v]))
-            if u != v and e not in edges:
-                edges.add(e)
-                adj[u].append(v)
-                adj[v].append(u)
-                break
-
-    # Fruchterman-Reingold フォースダイレクテッドレイアウト
-    pos = [[rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)] for _ in range(n)]
-    k = math.sqrt(0.6 / max(n, 1))  # 自然長
+    pos = [[rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)] for _ in range(sub_n)]
+    k = math.sqrt(0.6 / max(sub_n, 1))  # 自然長
 
     for iteration in range(300):
         t = 0.12 * (1.0 - iteration / 300)  # 温度（冷却）
-        disp = [[0.0, 0.0] for _ in range(n)]
+        disp = [[0.0, 0.0] for _ in range(sub_n)]
 
         # 反発力（全ノード対）
-        for i in range(n):
-            for j in range(i + 1, n):
+        for i in range(sub_n):
+            for j in range(i + 1, sub_n):
                 dx = pos[i][0] - pos[j][0]
                 dy = pos[i][1] - pos[j][1]
                 dist = math.sqrt(dx * dx + dy * dy) + 1e-6
@@ -2150,7 +2126,7 @@ def _make_random_graph(n, seed=None):
                 disp[j][1] -= dy / dist * f
 
         # 引力（辺で結ばれたノード対）
-        for u, v in edges:
+        for u, v in sub_edges:
             dx = pos[u][0] - pos[v][0]
             dy = pos[u][1] - pos[v][1]
             dist = math.sqrt(dx * dx + dy * dy) + 1e-6
@@ -2161,11 +2137,118 @@ def _make_random_graph(n, seed=None):
             disp[v][1] += dy / dist * f
 
         # 変位を適用（温度でクランプ）
-        for i in range(n):
+        for i in range(sub_n):
             d = math.sqrt(disp[i][0] ** 2 + disp[i][1] ** 2) + 1e-6
             scale = min(d, t) / d
             pos[i][0] = max(0.06, min(0.94, pos[i][0] + disp[i][0] * scale))
             pos[i][1] = max(0.06, min(0.94, pos[i][1] + disp[i][1] * scale))
+
+    return pos
+
+
+def _make_random_graph(n, seed=None):
+    """N ノードのランダム無向グラフを生成 (フォースダイレクテッドレイアウト)
+    一定確率で複数の連結成分に分割し、非連結グラフも生成する
+    (DFS/BFS で全ノードに到達できないケースを示すため)"""
+    import math
+    from random import Random
+    rng = Random(seed)
+
+    # ── 連結成分への分割 ─────────────────────────────────────────
+    if n >= 6 and rng.random() < 0.35:
+        n_components = rng.choice([2, 2, 3])
+    else:
+        n_components = 1
+
+    sizes = [n // n_components] * n_components
+    for i in range(n % n_components):
+        sizes[i] += 1
+    rng.shuffle(sizes)
+
+    node_ids = list(range(n))
+    rng.shuffle(node_ids)
+
+    edges = set()
+    adj   = {i: [] for i in range(n)}
+
+    idx = 0
+    for size in sizes:
+        comp = node_ids[idx: idx + size]
+        idx += size
+        if len(comp) <= 1:
+            continue
+
+        # 成分内をスパニングツリーで連結
+        perm    = comp[1:]
+        rng.shuffle(perm)
+        in_tree = [comp[0]]
+        for v in perm:
+            u = rng.choice(in_tree)
+            e = tuple(sorted([u, v]))
+            edges.add(e)
+            adj[u].append(v)
+            adj[v].append(u)
+            in_tree.append(v)
+
+        # 成分内に追加辺 (他の成分とは繋がない = 非連結を維持)
+        for _ in range(len(comp) // 3):
+            for _ in range(30):
+                u = rng.choice(comp)
+                v = rng.choice(comp)
+                e = tuple(sorted([u, v]))
+                if u != v and e not in edges:
+                    edges.add(e)
+                    adj[u].append(v)
+                    adj[v].append(u)
+                    break
+
+    # ── 連結成分ごとにレイアウトし、グリッド状に敷き詰める ──────────
+    # (成分間には辺=引力が無いため、単純にグローバルでFR配置すると
+    #  反発力だけが働いて成分同士がキャンバス端まで離れてしまう。
+    #  各成分を個別にレイアウトしてからタイル状に並べることで、
+    #  不必要な空白を防ぐ)
+    comp_id    = [-1] * n
+    components = []
+    for s in range(n):
+        if comp_id[s] != -1:
+            continue
+        comp  = []
+        stack = [s]
+        comp_id[s] = len(components)
+        while stack:
+            u = stack.pop()
+            comp.append(u)
+            for w in adj[u]:
+                if comp_id[w] == -1:
+                    comp_id[w] = len(components)
+                    stack.append(w)
+        components.append(comp)
+
+    pos = [[0.0, 0.0] for _ in range(n)]
+
+    if len(components) == 1:
+        local_pos = _fr_layout(n, list(edges), rng)
+        for i in range(n):
+            pos[i] = local_pos[i]
+    else:
+        ncomp  = len(components)
+        cols   = math.ceil(math.sqrt(ncomp))
+        rows   = math.ceil(ncomp / cols)
+        margin = 0.12   # セル内側の余白比率（成分同士の間隔を確保）
+        cellW, cellH = 1.0 / cols, 1.0 / rows
+
+        for ci, comp in enumerate(components):
+            comp_set    = set(comp)
+            local_index = {node_id: idx for idx, node_id in enumerate(comp)}
+            sub_edges   = [(local_index[u], local_index[v]) for (u, v) in edges
+                          if u in comp_set and v in comp_set]
+            local_pos = _fr_layout(len(comp), sub_edges, rng)
+
+            r, c = divmod(ci, cols)
+            for idx, node_id in enumerate(comp):
+                lx, ly = local_pos[idx]
+                pos[node_id][0] = c * cellW + margin * cellW + lx * cellW * (1 - 2 * margin)
+                pos[node_id][1] = r * cellH + margin * cellH + ly * cellH * (1 - 2 * margin)
 
     nodes = [{"id": i, "label": str(i),
               "x": round(pos[i][0], 3),
@@ -2175,13 +2258,16 @@ def _make_random_graph(n, seed=None):
 
 
 def _graph_frame(node_states, visited_edges, gn_list, ge_list,
-                 base, msg, color="lightgreen", finished=False):
+                 base, msg, color="lightgreen", finished=False,
+                 found=None, path_edges=None):
     COLOR_MAP = {
         "default": "#4472C4",
         "active":  "#ffcc44",
         "visited": "#44aa44",
         "queued":  "#ff8844",
         "start":   "#cc44ff",
+        "target":  "#ff44cc",
+        "path":    "#44ff88",
     }
     nodes = []
     for nd in gn_list:
@@ -2190,36 +2276,70 @@ def _graph_frame(node_states, visited_edges, gn_list, ge_list,
         hl    = col if state != "default" else None
         nodes.append({**nd, "color": col, "highlight": hl})
 
+    path_edges = path_edges or set()
     edges = []
     for u, v in ge_list:
         key = frozenset([u, v])
         edges.append({"from": u, "to": v, "directed": False,
-                      "highlight": key in visited_edges})
+                      "highlight": key in visited_edges,
+                      "path": key in path_edges})
 
     return _f([{"id": "graph", "type": "graph_view",
                 "nodes": nodes, "edges": edges, "label": "Graph", "weight": 1}],
-              base + [{"message": msg, "color": color}], finished=finished)
+              base + [{"message": msg, "color": color}], finished=finished, found=found)
+
+
+def _graph_target_from_kwargs(kwargs, N):
+    """kwargs から目的ノード番号を取り出す (範囲外・未指定なら None)"""
+    t = kwargs.get("target")
+    if t is None or t == "":
+        return None
+    try:
+        t = int(t)
+    except (TypeError, ValueError):
+        return None
+    return t if 0 <= t < N else None
+
+
+def _graph_reconstruct_path(parent, target):
+    """parent 辞書から start→target の経路 (ノード列) を復元"""
+    path = []
+    cur = target
+    while cur is not None:
+        path.append(cur)
+        cur = parent.get(cur)
+    path.reverse()
+    return path
 
 
 def graph_dfs(n, **kwargs):
-    """Ch.11: 深さ優先探索 (DFS)"""
+    """Ch.11: 深さ優先探索 (DFS)  target 指定時は目的ノードまでの経路を探索"""
     N = max(4, min(int(n), 24))
     gn_list, ge_list, adj = _make_random_graph(N, seed=kwargs.get("seed", N))
+    target = _graph_target_from_kwargs(kwargs, N)
 
-    base    = [{"message": f"深さ優先探索 (DFS)  N={N}  (Ch.11)", "color": "white"}]
+    title = f"深さ優先探索 (DFS)  N={N}"
+    if target is not None:
+        title += f"  目的ノード={target}"
+    base    = [{"message": title + "  (Ch.11)", "color": "white"}]
     start   = 0
     states  = {i: "default" for i in range(N)}
     v_edges = set()
+    parent  = {start: None}
 
-    def frame(msg, color="lightgreen", finished=False):
-        return _graph_frame(states, v_edges, gn_list, ge_list, base, msg, color, finished)
+    def frame(msg, color="lightgreen", finished=False, found=None, path_edges=None):
+        return _graph_frame(states, v_edges, gn_list, ge_list, base, msg, color,
+                            finished, found=found, path_edges=path_edges)
 
     visited = set()
     stack   = []
     order   = []
 
     yield frame(f"グラフ初期状態  N={N}  頂点 {N} 個  辺 {len(ge_list)} 本", "cyan")
-    states[start] = "start"
+    if target is not None and target == start:
+        states[start] = "target"
+    else:
+        states[start] = "start"
     stack.append(start)
     yield frame(f"DFS 開始  N={N}  start={start}  スタックに {start} をプッシュ", "cyan")
 
@@ -2232,32 +2352,58 @@ def graph_dfs(n, **kwargs):
         states[u] = "active"
         yield frame(f"Pop {u}  訪問順: {order}", "yellow")
 
+        if target is not None and u == target:
+            path = _graph_reconstruct_path(parent, target)
+            path_edges = {frozenset([path[i], path[i + 1]]) for i in range(len(path) - 1)}
+            for node_id in path:
+                states[node_id] = "path"
+            yield frame(f"目的ノード {target} に到達!  経路: {' → '.join(map(str, path))}",
+                       "#44ff88", finished=True, found=True, path_edges=path_edges)
+            return
+
         states[u] = "visited"
         pushed = []
         for w in sorted(adj[u], reverse=True):
             if w not in visited:
                 stack.append(w)
-                states[w] = "queued"
+                if w not in parent:
+                    parent[w] = u
+                states[w] = "target" if (target is not None and w == target) else "queued"
                 v_edges.add(frozenset([u, w]))
                 pushed.append(w)
         yield frame(f"ノード {u} 訪問済み  隣接: {sorted(pushed)} をスタックへ", "lightgreen")
 
-    yield frame(f"DFS 完了  訪問順: {order}", "#44aa44", finished=True)
+    if target is not None:
+        yield frame(f"DFS 完了  目的ノード {target} には到達できませんでした  訪問順: {order}",
+                   "#ff6655", finished=True, found=False)
+        return
+
+    unreached = sorted(set(range(N)) - visited)
+    msg = f"DFS 完了  訪問順: {order}"
+    if unreached:
+        msg += f"  (start={start} から未到達: {unreached}  ※非連結グラフ)"
+    yield frame(msg, "#44aa44", finished=True)
 
 
 def graph_bfs(n, **kwargs):
-    """Ch.11: 幅優先探索 (BFS)"""
+    """Ch.11: 幅優先探索 (BFS)  target 指定時は目的ノードまでの最短経路を探索"""
     from collections import deque
     N = max(4, min(int(n), 24))
     gn_list, ge_list, adj = _make_random_graph(N, seed=kwargs.get("seed", N))
+    target = _graph_target_from_kwargs(kwargs, N)
 
-    base    = [{"message": f"幅優先探索 (BFS)  N={N}  (Ch.11)", "color": "white"}]
+    title = f"幅優先探索 (BFS)  N={N}"
+    if target is not None:
+        title += f"  目的ノード={target}"
+    base    = [{"message": title + "  (Ch.11)", "color": "white"}]
     start   = 0
     states  = {i: "default" for i in range(N)}
     v_edges = set()
+    parent  = {start: None}
 
-    def frame(msg, color="lightgreen", finished=False):
-        return _graph_frame(states, v_edges, gn_list, ge_list, base, msg, color, finished)
+    def frame(msg, color="lightgreen", finished=False, found=None, path_edges=None):
+        return _graph_frame(states, v_edges, gn_list, ge_list, base, msg, color,
+                            finished, found=found, path_edges=path_edges)
 
     visited = set()
     queue   = deque()
@@ -2266,7 +2412,7 @@ def graph_bfs(n, **kwargs):
     yield frame(f"グラフ初期状態  N={N}  頂点 {N} 個  辺 {len(ge_list)} 本", "cyan")
     visited.add(start)
     queue.append(start)
-    states[start] = "start"
+    states[start] = "target" if target == start else "start"
     yield frame(f"BFS 開始  N={N}  start={start}  キューに {start} を追加", "cyan")
 
     while queue:
@@ -2275,18 +2421,37 @@ def graph_bfs(n, **kwargs):
         states[u] = "active"
         yield frame(f"Dequeue {u}  訪問順: {order}", "yellow")
 
+        if target is not None and u == target:
+            path = _graph_reconstruct_path(parent, target)
+            path_edges = {frozenset([path[i], path[i + 1]]) for i in range(len(path) - 1)}
+            for node_id in path:
+                states[node_id] = "path"
+            yield frame(f"目的ノード {target} に到達! (最短経路)  経路: {' → '.join(map(str, path))}",
+                       "#44ff88", finished=True, found=True, path_edges=path_edges)
+            return
+
         states[u] = "visited"
         enqueued = []
         for w in sorted(adj[u]):
             if w not in visited:
                 visited.add(w)
                 queue.append(w)
-                states[w] = "queued"
+                parent[w] = u
+                states[w] = "target" if (target is not None and w == target) else "queued"
                 v_edges.add(frozenset([u, w]))
                 enqueued.append(w)
         yield frame(f"ノード {u} 訪問済み  隣接: {enqueued} をキューへ", "lightgreen")
 
-    yield frame(f"BFS 完了  訪問順: {order}", "#44aa44", finished=True)
+    if target is not None:
+        yield frame(f"BFS 完了  目的ノード {target} には到達できませんでした  訪問順: {order}",
+                   "#ff6655", finished=True, found=False)
+        return
+
+    unreached = sorted(set(range(N)) - visited)
+    msg = f"BFS 完了  訪問順: {order}"
+    if unreached:
+        msg += f"  (start={start} から未到達: {unreached}  ※非連結グラフ)"
+    yield frame(msg, "#44aa44", finished=True)
 
 
 # ===========================================================================
@@ -3978,8 +4143,8 @@ AlgorithmList = [
     ("AVL木 挿入・探索・削除  (Ch.8)", avl_tree_operations, {"type": "misc", "tree_regen": True, "rotation_pause": True}),
     ("B木 挿入  (Ch.8)",            bt_operations,      {"type": "misc"}),
     # ── Ch.11: グラフ ──
-    ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc"}),
-    ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc"}),
+    ("深さ優先探索 DFS  (Ch.11)",    graph_dfs,          {"type": "misc", "target_node": True}),
+    ("幅優先探索 BFS  (Ch.11)",      graph_bfs,          {"type": "misc", "target_node": True}),
     # ── Ch.12: ゲーム木 ──
     ("ミニマックス法  (Ch.12)", minimax_game_tree, {"type": "misc", "depth_select": True}),
     ("α-β 枝刈り  (Ch.12)",    alpha_beta_pruning, {"type": "misc", "depth_select": True}),

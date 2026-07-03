@@ -99,6 +99,12 @@ function _algoSupportsRotationPause(algoId) {
   return !!(algo?.meta?.rotation_pause);
 }
 
+/** アルゴリズム ID が目的ノード指定 (target_node) をサポートするか (グラフ探索用) */
+function _algoSupportsTargetNode(algoId) {
+  const algo = algorithms.find(a => a.id === Number(algoId));
+  return !!(algo?.meta?.target_node);
+}
+
 /** キー型ごとのハッシュ関数オプション */
 const _KEY_TYPE_FUNCS = {
   int:   [
@@ -386,6 +392,7 @@ class ArrayPanel {
           <input type="number" class="inp-target" min="0" max="999" placeholder="自動"
                  style="width:60px" title="探索する値 (空欄=自動)">
         </label>
+        <span class="target-info" style="font-size:0.82em;margin-left:-4px"></span>
         <label class="lbl-condition" style="display:none">データ条件
           <select class="sel-condition"></select>
         </label>
@@ -521,14 +528,27 @@ class ArrayPanel {
 
   // ── アルゴリズム種別に応じて UI を表示/非表示 ─────────────────
   _updateParamVisibility() {
-    const algoId       = Number(this.el.querySelector(".sel-algo").value);
-    const type         = _algoType(algoId);
-    const hasInitData  = _algoSupportsInitData(algoId);
-    const hasDepthSel  = _algoSupportsDepthSel(algoId);
-    const hasOps       = _algoSupportsOps(algoId);
-    const hasHashFunc  = _algoSupportsHashFunc(algoId);
+    const algoId        = Number(this.el.querySelector(".sel-algo").value);
+    const type          = _algoType(algoId);
+    const hasInitData   = _algoSupportsInitData(algoId);
+    const hasDepthSel   = _algoSupportsDepthSel(algoId);
+    const hasOps        = _algoSupportsOps(algoId);
+    const hasHashFunc   = _algoSupportsHashFunc(algoId);
+    const hasTargetNode = _algoSupportsTargetNode(algoId);
 
-    this.el.querySelector(".lbl-target")   .style.display = type === "search" ? "" : "none";
+    const targetLbl = this.el.querySelector(".lbl-target");
+    const targetInp = this.el.querySelector(".inp-target");
+    targetLbl.style.display = (type === "search" || hasTargetNode) ? "" : "none";
+    if (hasTargetNode) {
+      // グラフ探索: target = 目的ノード番号 (空欄なら全ノードを走査する従来モード)
+      targetLbl.childNodes[0].textContent = "目的ノード\n";
+      targetInp.title = "経路探索する目的ノード番号 (空欄=全ノードを走査)";
+      targetInp.placeholder = "空欄=全探索";
+    } else {
+      targetLbl.childNodes[0].textContent = "target\n";
+      targetInp.title = "探索する値 (空欄=自動)";
+      targetInp.placeholder = "自動";
+    }
     this.el.querySelector(".lbl-condition").style.display = type === "sort"   ? "" : "none";
     // lbl-size は常に表示 (misc でも num_items は参照される)
 
@@ -636,6 +656,33 @@ class ArrayPanel {
       const currentKT = this.el.querySelector(".sel-key-type").value || "int";
       this._rebuildHashFuncOptions(currentKT);
     }
+
+    this._validateTargetNode();
+  }
+
+  // ── 目的ノード / target 入力のバリデーション ─────────────────
+  // 戻り値: 入力が妥当なら true（空欄も妥当＝自動/全探索）、不正なら false
+  _validateTargetNode() {
+    const algoId = Number(this.el.querySelector(".sel-algo").value);
+    const info    = this.el.querySelector(".target-info");
+    const inp     = this.el.querySelector(".inp-target");
+    info.textContent = "";
+    info.className   = "target-info";
+
+    if (!_algoSupportsTargetNode(algoId)) return true;
+
+    const raw = inp.value.trim();
+    if (raw === "") return true;   // 空欄 = 全探索（従来モード）
+
+    const n = Number(this.el.querySelector(".sel-size").value) || 0;
+    const isIntStr = /^\d+$/.test(raw);
+    const v = Number(raw);
+    if (!isIntStr || v < 0 || v > n - 1) {
+      info.textContent = `⚠ 0〜${Math.max(0, n - 1)} の整数を入力してください`;
+      info.className   = "target-info error";
+      return false;
+    }
+    return true;
   }
 
   // ── イベントバインド ─────────────────────────────────────────
@@ -655,8 +702,14 @@ class ArrayPanel {
     q(".sel-algo").addEventListener("change", () => {
       if (!this.isRunning) { this._updateParamVisibility(); this._drawPreview(); }
     });
-    q(".sel-size")     .addEventListener("change", () => { if (!this.isRunning) this._drawPreview(); });
-    q(".inp-target")   .addEventListener("change", () => { if (!this.isRunning) this._drawPreview(); });
+    q(".sel-size")     .addEventListener("change", () => {
+      this._validateTargetNode();
+      if (!this.isRunning) this._drawPreview();
+    });
+    q(".inp-target")   .addEventListener("input",  () => { this._validateTargetNode(); });
+    q(".inp-target")   .addEventListener("change", () => {
+      if (!this.isRunning && this._validateTargetNode()) this._drawPreview();
+    });
     q(".sel-condition").addEventListener("change", () => { if (!this.isRunning) this._drawPreview(); });
 
     // 初期状態: 設定ボタン & Enter キー
@@ -1054,6 +1107,12 @@ class ArrayPanel {
       if (_algoSupportsTraversalSel(algoId)) {
         previewUrl += `&traversal=${this._traversal}`;
       }
+      if (_algoSupportsTargetNode(algoId)) {
+        const tRaw = this.el.querySelector(".inp-target").value.trim();
+        if (tRaw !== "" && this._validateTargetNode()) {
+          previewUrl += `&target=${encodeURIComponent(tRaw)}`;
+        }
+      }
       const res = await fetch(previewUrl);
       if (!res.ok) return;
       const frame = await res.json();
@@ -1097,6 +1156,11 @@ class ArrayPanel {
   async start() {
     if (this.isRunning) return;
 
+    if (!this._validateTargetNode()) {
+      this._setStatus("エラー: 目的ノードの入力が不正です", "red");
+      return;
+    }
+
     const algoId   = Number(this.el.querySelector(".sel-algo").value);
     const numItems = Number(this.el.querySelector(".sel-size").value);
     const speed    = this._currentSpeed();
@@ -1137,6 +1201,10 @@ class ArrayPanel {
         if (_algoSupportsTraversalSel(algoId)) body.traversal   = this._traversal;
         if (_algoSupportsRotationPause(algoId)) {
           body.rotation_pause = !!this.el.querySelector(".chk-rotation-pause")?.checked;
+        }
+        if (_algoSupportsTargetNode(algoId)) {
+          const tRaw = this.el.querySelector(".inp-target").value.trim();
+          if (tRaw !== "") body.target = Number(tRaw);
         }
       }
 
