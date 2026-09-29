@@ -3,12 +3,8 @@
   "configurations": [
     {
       "name": "AAforDataStructures",
-      "runtimeExecutable": "/Volumes/Dropbox/Dropbox/MyProjects/Claude/AA by Python for CC/AAforDataStructures/.venv/bin/uvicorn",
-      "runtimeArgs": [
-        "main:app",
-        "--port",
-        "8006"
-      ],
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["../run_server.sh", ".", "8006"],
       "port": 8006
     }
   ]

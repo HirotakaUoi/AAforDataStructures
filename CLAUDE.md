@@ -207,7 +207,7 @@ _hash_obj(id, slots, m, label="", active=-1, weight=1)
 ## 開発サーバー
 
 ```bash
-cd AAforDataStructures && python -m uvicorn main:app --port 8006
+./run_server.sh AAforDataStructures 8006   # プロジェクトルートから（詳細はルート CLAUDE.md）
 ```
 
 - ポート: **8006**
@@ -261,6 +261,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-09-29 | 起動方式を変更（アプリのコード変更なし）— ルートの共通スクリプト `run_server.sh` 経由に統一。`.venv` を Dropbox で全マシン共有するため、Python を uv 管理の **3.14.4** に固定（`.python-version` は git 管理外、pyproject に `[tool.uv] python-preference = "only-managed"`）し、venv を relocatable で作り直した（Dropbox の2通りのパスどちらでも動く）。`.claude/launch.json` も `../run_server.sh . <port>` に変更。Python 3.14.4 で全アルゴリズムの完走を確認 |
 | 2026-07-17 | WebSocket keep-alive を追加 — 接続中は45秒間隔で `{"action":"ping"}` を送信し、Render 無料枠の「インバウンド通信15分無しでスピンダウン」による切断を防止（一時停止中も有効）。明示的な停止・完了・切断が無くても最大1時間で送信を打ち切る。サーバー側は未知 action を無視する既存実装のまま変更なし (ws_client.js v1→v2) |
 | 2026-07-03 (3) | 全アルゴリズム共通: 完了時の全画面dimが探索結果(Found!/Not Found)・計算結果(result)バナーにまだ残っていたのを修正（生データ構造が隠れて確認できない問題）。キャンバス上には一切描かず、ステータスバーの `status-done-badge` に「✅ Found !」「❌ Not Found」「✅ 結果 = …」「🎉 完了!」を固定背景色バッジ（テーマが変わっても視認性が落ちない）で表示するよう統一。表示時に短いフラッシュアニメーション(1.4秒)を付与し「一時的に目立たせてからステータス表示に落ち着く」動きに。副次的に、テーマ切替時に実行中でないパネル（完了後含む）が最終フレームでなくプレビューに巻き戻るバグも発見・修正（`_applyTheme` の再描画条件から `isRunning` 判定を除去） (array_canvas.js v53→v54, app.js v44→v45, style.css v8→v9) |
 | 2026-07-03 (2) | DFS/BFS: 「目的ノードを入力→開始」のように `.inp-target` が blur した際の change イベントで意図せずグラフが再抽選され、プレビューと実際に開始されるアニメーションが食い違うバグを修正。`tree_regen` と同様のシード固定ロジックを `target_node` 対応アルゴリズムにも適用 (app.js v43→v44) |

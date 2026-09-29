@@ -7,3 +7,7 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
 ]
 
+# ローカル開発用: .venv を Dropbox 経由で全マシン共有するため、Python は uv 管理の版
+# （.python-version で固定）だけを使う。起動は ../run_server.sh 経由で行うこと
+[tool.uv]
+python-preference = "only-managed"
