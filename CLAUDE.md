@@ -261,6 +261,7 @@ AAforDataStructures/
 
 | 日付 | 内容 |
 |---|---|
+| 2026-10-27 (2) | Python を uv 管理の **3.14.10** に更新（3.14.9 から。セキュリティ修正3件）。依存パッケージは変更なし（すでに最新）。アプリのコード変更なし。venv は relocatable で作り直し。全34アルゴリズムが完走し、全フレームの内容が更新前と完全一致することを確認 |
 | 2026-10-27 | Python を uv 管理の **3.14.9** に更新（3.14.4 から。セキュリティ修正32件）し、依存パッケージを最新に更新（fastapi 0.162.0 / starlette 1.10.0 / uvicorn 0.54.0 / websockets 17.3 / pydantic 2.14.1。starlette・anyio・idna の既知の脆弱性8件を解消）。アプリのコード変更なし。venv は relocatable で作り直し。全34アルゴリズムが完走し、全フレームの内容が更新前と完全一致することを確認 |
 | 2026-09-29 | 起動方式を変更（アプリのコード変更なし）— ルートの共通スクリプト `run_server.sh` 経由に統一。`.venv` を Dropbox で全マシン共有するため、Python を uv 管理の **3.14.4** に固定（`.python-version` は git 管理外、pyproject に `[tool.uv] python-preference = "only-managed"`）し、venv を relocatable で作り直した（Dropbox の2通りのパスどちらでも動く）。`.claude/launch.json` も `../run_server.sh . <port>` に変更。Python 3.14.4 で全アルゴリズムの完走を確認 |
 | 2026-07-17 | WebSocket keep-alive を追加 — 接続中は45秒間隔で `{"action":"ping"}` を送信し、Render 無料枠の「インバウンド通信15分無しでスピンダウン」による切断を防止（一時停止中も有効）。明示的な停止・完了・切断が無くても最大1時間で送信を打ち切る。サーバー側は未知 action を無視する既存実装のまま変更なし (ws_client.js v1→v2) |
