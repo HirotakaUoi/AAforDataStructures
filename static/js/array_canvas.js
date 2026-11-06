@@ -65,7 +65,7 @@ const AC_THEMES = {
     connectorColor: "#5577aa",
   },
 };
-let _acThemeKey = "dark";
+let _acThemeKey = "bright";   // 初期テーマは明るめ（index.html の <body data-theme> と ☀ ボタンの theme-active も同じにする）
 function _acTheme() { return AC_THEMES[_acThemeKey] ?? AC_THEMES.dark; }
 /** app.js から呼ばれる */
 function setCanvasTheme(k) { _acThemeKey = k; }
