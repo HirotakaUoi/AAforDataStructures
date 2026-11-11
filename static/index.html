@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AAforDataStructures – データ構造可視化</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=11">
+  <link rel="stylesheet" href="/static/css/style.css?v=13">
 </head>
 <body data-theme="bright">
 
@@ -12,19 +12,19 @@
   <header>
     <!-- 1行目: タイトル + パネル操作 -->
     <div class="header-row">
-      <h1>AAforDataStructures – データ構造可視化</h1>
+      <h1>AAforDataStructures<span class="hdr-sub"> – データ構造可視化</span></h1>
       <div id="toolbar">
-        <button id="btn-add-panel"  class="btn btn-add">＋ パネル追加</button>
-        <button id="btn-start-all"  class="btn btn-success">▶▶ 全開始</button>
-        <button id="btn-pause-all"  class="btn btn-warning">⏸ 全一時停止</button>
-        <button id="btn-stop-all"   class="btn btn-danger">⏹ 全停止</button>
-        <button id="btn-reset-all"  class="btn btn-secondary">↺ 全リセット</button>
-        <button id="btn-sync-size"  class="btn btn-secondary" title="最前面のパネルサイズに全パネルを合わせる">⊞ サイズ統一</button>
+        <button id="btn-add-panel"  class="btn btn-add" title="パネル追加">＋<span class="btn-text">パネル追加</span></button>
+        <button id="btn-start-all"  class="btn btn-success" title="全開始">▶▶<span class="btn-text">全開始</span></button>
+        <button id="btn-pause-all"  class="btn btn-warning" title="全一時停止">⏸<span class="btn-text">全一時停止</span></button>
+        <button id="btn-stop-all"   class="btn btn-danger" title="全停止">⏹<span class="btn-text">全停止</span></button>
+        <button id="btn-reset-all"  class="btn btn-secondary" title="全リセット">↺<span class="btn-text">全リセット</span></button>
+        <button id="btn-sync-size"  class="btn btn-secondary" title="最前面のパネルサイズに全パネルを合わせる">⊞<span class="btn-text">サイズ統一</span></button>
         <span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;border-left:1px solid #555;padding-left:10px">
-          <label style="font-size:0.85em;white-space:nowrap">データ数
+          <label style="font-size:0.85em;white-space:nowrap" title="データ数"><span class="lbl">データ数</span>
             <select id="global-size" style="margin-left:4px"></select>
           </label>
-          <button id="btn-apply-global" class="btn btn-secondary" title="全非実行パネルのデータ数とシードを統一">↕ 全パネルへ適用</button>
+          <button id="btn-apply-global" class="btn btn-secondary" title="全非実行パネルのデータ数とシードを統一">↕<span class="lbl-long">全パネルへ適用</span><span class="lbl-short">適用</span></button>
         </span>
         <div id="zoom-controls">
           <button id="btn-zoom-out"   class="btn btn-secondary" title="縮小">－</button>
@@ -48,6 +48,6 @@
   <!-- ===== スクリプト ===== -->
   <script src="/static/js/array_canvas.js?v=55"></script>
   <script src="/static/js/ws_client.js?v=2"></script>
-  <script src="/static/js/app.js?v=49"></script>
+  <script src="/static/js/app.js?v=51"></script>
 </body>
 </html>
