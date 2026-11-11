@@ -468,7 +468,7 @@ function applyGlobalToAll() {
       // misc: 共通シードでプレビューを同期
       const canvas = el.querySelector(".array-canvas");
       const ctx    = canvas.getContext("2d");
-      ctx.fillStyle = "#1a1a2e";
+      ctx.fillStyle = _acTheme().canvasBg;   // 今のテーマの背景色（固定の暗い色だと明るいテーマで一瞬黒く見えた）
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       panel._fetchAndDrawPreview(sharedSeed);
     } else {
@@ -1226,10 +1226,10 @@ class ArrayPanel {
     const algo     = algorithms.find(a => a.id === algoId);
     const type     = algo?.meta?.type || "search";
 
-    // misc 型: まず暗色で塗り、非同期でサーバーから初期フレームを取得して描画
+    // misc 型: まず今のテーマの背景色で塗り、非同期でサーバーから初期フレームを取得して描画
     if (type === "misc") {
       const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#1a1a2e";
+      ctx.fillStyle = _acTheme().canvasBg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       this._fetchAndDrawPreview();
       return;
